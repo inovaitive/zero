@@ -32,17 +32,19 @@ class ZeroCLI:
     - Optional debug/logs panel
     """
 
-    def __init__(self, state_manager: StateManager, show_logs: bool = True):
+    def __init__(self, state_manager: StateManager, show_logs: bool = True, debug_nlu: bool = False):
         """
         Initialize CLI.
 
         Args:
             state_manager: State manager instance
             show_logs: Whether to show logs panel
+            debug_nlu: Whether to show NLU debug information
         """
         self.console = Console()
         self.state_manager = state_manager
         self.show_logs = show_logs
+        self.debug_nlu = debug_nlu
 
         # Conversation history: [(timestamp, speaker, message)]
         self.conversation: List[Tuple[datetime, str, str]] = []
@@ -52,6 +54,15 @@ class ZeroCLI:
 
         # Current transcription (live)
         self.current_transcription = ""
+
+        # NLU debug info
+        self.nlu_debug = {
+            'intent': None,
+            'confidence': 0.0,
+            'entities': {},
+            'context': {},
+            'method': None,
+        }
 
         # Layout
         self.layout = self._create_layout()
@@ -71,12 +82,28 @@ class ZeroCLI:
             Layout(name="footer", size=3)
         )
 
-        if self.show_logs:
+        # Configure main layout based on enabled panels
+        if self.debug_nlu and self.show_logs:
+            # Three columns: conversation | NLU debug | logs
+            layout["main"].split_row(
+                Layout(name="conversation", ratio=2),
+                Layout(name="nlu_debug", ratio=1),
+                Layout(name="logs", ratio=1)
+            )
+        elif self.debug_nlu:
+            # Two columns: conversation | NLU debug
+            layout["main"].split_row(
+                Layout(name="conversation", ratio=2),
+                Layout(name="nlu_debug", ratio=1)
+            )
+        elif self.show_logs:
+            # Two columns: conversation | logs
             layout["main"].split_row(
                 Layout(name="conversation"),
                 Layout(name="logs", ratio=1)
             )
         else:
+            # Single column: conversation only
             layout["main"].update(Layout(name="conversation"))
 
         return layout
@@ -186,6 +213,101 @@ class ZeroCLI:
             box=box.ROUNDED
         )
 
+    def _create_nlu_debug_panel(self) -> Panel:
+        """
+        Create NLU debug panel showing intent, entities, and context.
+
+        Returns:
+            NLU debug panel
+        """
+        # Create debug info table
+        table = Table(show_header=False, box=None, padding=(0, 1))
+        table.add_column("Field", style="bold cyan", width=12)
+        table.add_column("Value")
+
+        # Intent
+        intent_text = self.nlu_debug.get('intent', 'N/A')
+        confidence = self.nlu_debug.get('confidence', 0.0)
+        method = self.nlu_debug.get('method', 'N/A')
+
+        # Color confidence based on value
+        if confidence >= 0.8:
+            conf_style = "bold green"
+        elif confidence >= 0.5:
+            conf_style = "bold yellow"
+        else:
+            conf_style = "bold red"
+
+        table.add_row(
+            "Intent:",
+            Text(str(intent_text), style="green")
+        )
+        table.add_row(
+            "Confidence:",
+            Text(f"{confidence:.2f}", style=conf_style)
+        )
+        table.add_row(
+            "Method:",
+            Text(str(method), style="dim")
+        )
+
+        # Add separator
+        table.add_row("", "")
+
+        # Entities
+        entities = self.nlu_debug.get('entities', {})
+        if entities:
+            table.add_row(
+                Text("Entities:", style="bold magenta"),
+                ""
+            )
+            for entity_type, entity_value in entities.items():
+                # Format entity value
+                if isinstance(entity_value, (list, dict)):
+                    value_str = str(entity_value)[:40] + "..."
+                else:
+                    value_str = str(entity_value)
+
+                table.add_row(
+                    f"  {entity_type}:",
+                    Text(value_str, style="magenta")
+                )
+        else:
+            table.add_row(
+                Text("Entities:", style="bold magenta"),
+                Text("None", style="dim")
+            )
+
+        # Add separator
+        table.add_row("", "")
+
+        # Context
+        context = self.nlu_debug.get('context', {})
+        if context:
+            table.add_row(
+                Text("Context:", style="bold yellow"),
+                ""
+            )
+            # Show only key context items
+            for key in ['current_topic', 'current_location', 'implied_location']:
+                if key in context and context[key]:
+                    table.add_row(
+                        f"  {key}:",
+                        Text(str(context[key]), style="yellow")
+                    )
+        else:
+            table.add_row(
+                Text("Context:", style="bold yellow"),
+                Text("None", style="dim")
+            )
+
+        return Panel(
+            table,
+            title="[bold]NLU Debug",
+            border_style="magenta",
+            box=box.ROUNDED
+        )
+
     def _create_footer(self) -> Panel:
         """
         Create footer panel with current state and help.
@@ -230,12 +352,13 @@ class ZeroCLI:
         """Update the layout with current content."""
         self.layout["header"].update(self._create_header())
         self.layout["footer"].update(self._create_footer())
+        self.layout["conversation"].update(self._create_conversation_panel())
+
+        if self.debug_nlu:
+            self.layout["nlu_debug"].update(self._create_nlu_debug_panel())
 
         if self.show_logs:
-            self.layout["conversation"].update(self._create_conversation_panel())
             self.layout["logs"].update(self._create_logs_panel())
-        else:
-            self.layout["conversation"].update(self._create_conversation_panel())
 
     def add_message(self, speaker: str, message: str):
         """
@@ -265,6 +388,42 @@ class ZeroCLI:
             text: Current transcription text
         """
         self.current_transcription = text
+
+    def update_nlu_debug(
+        self,
+        intent: str = None,
+        confidence: float = 0.0,
+        entities: dict = None,
+        context: dict = None,
+        method: str = None
+    ):
+        """
+        Update NLU debug information.
+
+        Args:
+            intent: Classified intent
+            confidence: Classification confidence
+            entities: Extracted entities dictionary
+            context: Current context dictionary
+            method: Classification method used
+        """
+        if intent is not None:
+            self.nlu_debug['intent'] = intent
+        if confidence is not None:
+            self.nlu_debug['confidence'] = confidence
+        if entities is not None:
+            self.nlu_debug['entities'] = entities
+        if context is not None:
+            self.nlu_debug['context'] = context
+        if method is not None:
+            self.nlu_debug['method'] = method
+
+    def toggle_nlu_debug(self):
+        """Toggle NLU debug panel on/off."""
+        self.debug_nlu = not self.debug_nlu
+        # Recreate layout with new configuration
+        self.layout = self._create_layout()
+        self.print_info(f"NLU debug: {'enabled' if self.debug_nlu else 'disabled'}")
 
     def clear(self):
         """Clear the terminal."""
@@ -321,15 +480,16 @@ class ZeroCLI:
                 pass
 
 
-def create_cli(state_manager: StateManager, show_logs: bool = True) -> ZeroCLI:
+def create_cli(state_manager: StateManager, show_logs: bool = True, debug_nlu: bool = False) -> ZeroCLI:
     """
     Create CLI instance.
 
     Args:
         state_manager: State manager instance
         show_logs: Whether to show logs panel
+        debug_nlu: Whether to show NLU debug panel
 
     Returns:
         ZeroCLI instance
     """
-    return ZeroCLI(state_manager, show_logs)
+    return ZeroCLI(state_manager, show_logs, debug_nlu)

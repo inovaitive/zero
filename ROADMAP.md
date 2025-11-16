@@ -293,7 +293,7 @@ zero/
     - Pattern matching with regex
     - Keyword detection
     - spaCy rule-based matching
-  - **Cloud classification (OpenAI GPT/Ollama)**:
+  - **Cloud classification (OpenAI GPT)**:
     - Fallback for ambiguous queries
     - Context-aware understanding
     - Few-shot learning for custom intents
