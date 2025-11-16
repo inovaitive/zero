@@ -97,11 +97,11 @@ Available intents:
 User input: "{user_input}"
 
 Respond with JSON:
-{
+{{
   "intent": "intent.name",
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"
-}
+}}
 """
 
     def __init__(

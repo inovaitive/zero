@@ -127,7 +127,8 @@ class IntentClassifier:
             IntentType.WEATHER_QUERY: [
                 r'\b(what|how)\'?s?\s+the\s+weather\b',
                 r'\bweather\s+(in|at|for)\b',
-                r'\b(will|is)\s+it\s+(rain|snow|sunny|cloudy)\b',
+                r'\b(will|is)\s+it\s+(going\s+to\s+)?(rain|snow|sunny|cloudy)\b',
+                r'\bis\s+it\s+going\s+to\s+(rain|snow|sunny|cloudy)\b',
                 r'\bforecast\b',
                 r'\btemperature\b.*\b(in|at|for)\b',
                 r'\bhow\s+(hot|cold|warm)\b',
@@ -141,10 +142,10 @@ class IntentClassifier:
                 r'\balarm\s+(for|in)\b',
             ],
             IntentType.TIMER_CANCEL: [
-                r'\bcancel\s+(the\s+)?timer\b',
-                r'\bstop\s+(the\s+)?timer\b',
-                r'\bdelete\s+(the\s+)?timer\b',
-                r'\bturn\s+off\s+(the\s+)?timer\b',
+                r'\bcancel\s+(the\s+)?(all\s+)?timer(s)?\b',
+                r'\bstop\s+(the\s+)?(all\s+)?timer(s)?\b',
+                r'\bdelete\s+(the\s+)?(all\s+)?timer(s)?\b',
+                r'\bturn\s+off\s+(the\s+)?(all\s+)?timer(s)?\b',
             ],
             IntentType.TIMER_LIST: [
                 r'\blist\s+timers\b',
