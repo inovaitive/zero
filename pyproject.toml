@@ -21,7 +21,7 @@ classifiers = [
 
 dependencies = [
     # Audio - Wake Word Detection
-    "pvporcupine==2.2.0",
+    "pvporcupine==3.0.5",
 
     # Audio - Speech-to-Text (STT)
     "deepgram-sdk==3.2.0",
