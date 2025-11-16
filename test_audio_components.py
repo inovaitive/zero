@@ -162,20 +162,47 @@ def test_stt():
             return
 
         print("\n🎤 Recording audio for transcription...")
-        print("Say something (will auto-stop after silence):")
+        print("Say something clearly and loudly (will auto-stop after silence):")
 
         # Record audio
-        recorder = AudioRecorder(sample_rate=16000)
+        recorder = AudioRecorder(
+            sample_rate=16000,
+            silence_threshold=0.02,  # Increased threshold for better detection
+            silence_duration=2.0      # Wait 2 seconds of silence before stopping
+        )
         audio_data = recorder.record_until_silence(max_duration=10.0)
         recorder.stop()
 
-        print(f"\n✅ Recorded {len(audio_data)} bytes")
+        print(f"\n✅ Recorded {len(audio_data)} bytes ({len(audio_data) / (16000 * 2):.2f} seconds)")
+
+        # Check if we got any audio
+        if len(audio_data) < 1000:  # Less than ~0.03 seconds
+            print("\n❌ Not enough audio recorded. Try speaking louder or closer to microphone.")
+            return
+
+        # Save to file for debugging
+        import tempfile
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
+
+        recorder._frames = []  # Reset frames to save just this recording
+        import numpy as np
+        audio_array = np.frombuffer(audio_data, dtype=np.int16)
+        import soundfile as sf
+        sf.write(temp_path, audio_array.astype(np.float32) / 32768.0, 16000)
+        print(f"💾 Audio saved to: {temp_path}")
 
         # Transcribe
         print("\n📝 Transcribing with Deepgram...")
 
         stt = SpeechToText(api_key=api_key, model="nova-2")
-        transcript = stt.transcribe_bytes(audio_data, sample_rate=16000)
+        transcript = stt.transcribe_bytes(
+            audio_data,
+            sample_rate=16000,
+            channels=1,
+            encoding="linear16"
+        )
 
         if transcript:
             print(f"\n✨ Transcription: '{transcript}'")

@@ -37,7 +37,7 @@ class AudioRecorder:
         channels: int = 1,
         chunk_size: int = 512,
         device_index: Optional[int] = None,
-        silence_threshold: float = 0.01,
+        silence_threshold: float = 0.02,
         silence_duration: float = 1.5
     ):
         """
