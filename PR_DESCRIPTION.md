@@ -100,6 +100,12 @@ For developers:
 
 ## Recent Updates
 
+**STT Test Improvements (commit 23c970a)**
+- Improved silence detection threshold (0.01 → 0.02) for better audio capture
+- Added audio duration display and minimum length check
+- Saves recorded audio to temp WAV file for debugging
+- Helps diagnose "No transcription returned" errors
+
 **Picovoice Porcupine Upgrade (commit d20b596)**
 - Upgraded pvporcupine from 2.2.0 to 3.0.5 (latest as of Feb 2025)
 - Fixes error: "This version of Picovoice software is no longer supported"
@@ -113,5 +119,5 @@ For developers:
 ---
 
 **Tested on**: macOS with sounddevice 0.4.6, Python 3.10+, pvporcupine 3.0.5
-**Related commits**: 9d7ab3f, 9ec3b03, d20b596
+**Related commits**: 9d7ab3f, 9ec3b03, d20b596, 23c970a
 **Branch**: `claude/zero-assistant-planning-01LgqqSKyNncLLBjUjrNJwu9` → `main`
