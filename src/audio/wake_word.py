@@ -3,12 +3,14 @@ Wake word detection using Picovoice Porcupine.
 
 This module provides always-on wake word detection with low CPU usage.
 Supports keywords like "jarvis", "computer", "hey google", etc.
+
+Using sounddevice for better macOS compatibility.
 """
 
-import struct
 import threading
 from typing import Optional, Callable
-import pyaudio
+import numpy as np
+import sounddevice as sd
 
 try:
     import pvporcupine
@@ -52,7 +54,7 @@ class WakeWordDetector:
         """
         if not PORCUPINE_AVAILABLE:
             raise RuntimeError(
-                "pvporcupine not available. Install with: pip install pvporcupine"
+                "pvporcupine not available. Install with: uv pip install pvporcupine"
             )
 
         self.access_key = access_key
@@ -64,8 +66,7 @@ class WakeWordDetector:
         self.porcupine: Optional[pvporcupine.Porcupine] = None
 
         # Audio stream
-        self.audio: Optional[pyaudio.PyAudio] = None
-        self.stream: Optional[pyaudio.Stream] = None
+        self.stream: Optional[sd.InputStream] = None
 
         # Threading
         self._listening = False
@@ -93,22 +94,19 @@ class WakeWordDetector:
                 logger.info(f"Frame length: {self.porcupine.frame_length}")
                 logger.info(f"Sample rate: {self.porcupine.sample_rate}")
 
-                # Initialize PyAudio
-                self.audio = pyaudio.PyAudio()
+                # Start listening
+                self._listening = True
 
-                # Open audio stream
-                self.stream = self.audio.open(
-                    rate=self.porcupine.sample_rate,
+                # Open audio stream with callback
+                self.stream = sd.InputStream(
+                    samplerate=self.porcupine.sample_rate,
                     channels=1,
-                    format=pyaudio.paInt16,
-                    input=True,
-                    frames_per_buffer=self.porcupine.frame_length
+                    dtype='int16',
+                    blocksize=self.porcupine.frame_length,
+                    callback=self._audio_callback
                 )
 
-                # Start listening thread
-                self._listening = True
-                self._thread = threading.Thread(target=self._listen_loop, daemon=True)
-                self._thread.start()
+                self.stream.start()
 
                 logger.info("Wake word detection started")
 
@@ -116,6 +114,42 @@ class WakeWordDetector:
                 logger.error(f"Failed to start wake word detector: {e}")
                 self._cleanup()
                 raise
+
+    def _audio_callback(self, indata, frames, time, status):
+        """
+        Audio callback for processing incoming audio.
+
+        Args:
+            indata: Input audio data
+            frames: Number of frames
+            time: Timing info
+            status: Status flags
+        """
+        if status:
+            logger.warning(f"Audio callback status: {status}")
+
+        if not self._listening:
+            return
+
+        try:
+            # Convert to 1D array and process
+            pcm = indata.squeeze()
+
+            # Check for wake word
+            keyword_index = self.porcupine.process(pcm)
+
+            if keyword_index >= 0:
+                logger.info(f"Wake word '{self.keyword}' detected!")
+
+                # Trigger callback
+                if self.on_detected:
+                    try:
+                        self.on_detected()
+                    except Exception as e:
+                        logger.error(f"Error in wake word callback: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in audio callback: {e}")
 
     def stop(self):
         """Stop listening for wake word."""
@@ -126,74 +160,20 @@ class WakeWordDetector:
             logger.info("Stopping wake word detection...")
             self._listening = False
 
-            # Wait for thread to finish
-            if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=2.0)
-
             self._cleanup()
             logger.info("Wake word detection stopped")
 
-    def _listen_loop(self):
-        """
-        Main listening loop (runs in background thread).
-
-        Continuously reads audio from microphone and checks for wake word.
-        """
-        logger.info("Wake word listening loop started")
-
-        try:
-            while self._listening:
-                # Read audio frame
-                pcm = self.stream.read(
-                    self.porcupine.frame_length,
-                    exception_on_overflow=False
-                )
-
-                # Convert to int16 array
-                pcm = struct.unpack_from(
-                    "h" * self.porcupine.frame_length,
-                    pcm
-                )
-
-                # Check for wake word
-                keyword_index = self.porcupine.process(pcm)
-
-                if keyword_index >= 0:
-                    logger.info(f"Wake word '{self.keyword}' detected!")
-
-                    # Trigger callback
-                    if self.on_detected:
-                        try:
-                            self.on_detected()
-                        except Exception as e:
-                            logger.error(f"Error in wake word callback: {e}")
-
-        except Exception as e:
-            logger.error(f"Error in wake word listening loop: {e}")
-            self._listening = False
-
-        logger.info("Wake word listening loop ended")
-
     def _cleanup(self):
         """Clean up audio resources."""
-        # Close audio stream
+        # Stop and close audio stream
         if self.stream:
             try:
-                self.stream.stop_stream()
+                self.stream.stop()
                 self.stream.close()
             except Exception as e:
                 logger.error(f"Error closing audio stream: {e}")
             finally:
                 self.stream = None
-
-        # Terminate PyAudio
-        if self.audio:
-            try:
-                self.audio.terminate()
-            except Exception as e:
-                logger.error(f"Error terminating PyAudio: {e}")
-            finally:
-                self.audio = None
 
         # Delete Porcupine
         if self.porcupine:

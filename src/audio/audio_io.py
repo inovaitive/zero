@@ -1,15 +1,18 @@
 """
-Audio input/output management.
+Audio input/output management using sounddevice.
 
 This module handles microphone input, speaker output, and audio buffering.
 Includes Voice Activity Detection (VAD) for automatic silence detection.
+
+Using sounddevice instead of PyAudio for better macOS compatibility.
 """
 
 import wave
 import struct
 from typing import Optional, List
 from pathlib import Path
-import pyaudio
+import sounddevice as sd
+import soundfile as sf
 import numpy as np
 
 from src.core.logger import get_logger
@@ -34,7 +37,7 @@ class AudioRecorder:
         channels: int = 1,
         chunk_size: int = 512,
         device_index: Optional[int] = None,
-        silence_threshold: float = 500.0,
+        silence_threshold: float = 0.01,
         silence_duration: float = 1.5
     ):
         """
@@ -55,10 +58,7 @@ class AudioRecorder:
         self.silence_threshold = silence_threshold
         self.silence_duration = silence_duration
 
-        self.audio: Optional[pyaudio.PyAudio] = None
-        self.stream: Optional[pyaudio.Stream] = None
-
-        self._frames: List[bytes] = []
+        self._frames: List[np.ndarray] = []
         self._recording = False
 
         logger.info(
@@ -75,35 +75,35 @@ class AudioRecorder:
         self._frames = []
         self._recording = True
 
-        # Initialize PyAudio
-        self.audio = pyaudio.PyAudio()
-
-        # Open stream
-        self.stream = self.audio.open(
-            format=pyaudio.paInt16,
-            channels=self.channels,
-            rate=self.sample_rate,
-            input=True,
-            input_device_index=self.device_index,
-            frames_per_buffer=self.chunk_size
-        )
-
         logger.info("Recording started")
 
-    def record_chunk(self) -> bytes:
+    def record_chunk(self) -> np.ndarray:
         """
         Record one chunk of audio.
 
         Returns:
-            Audio chunk as bytes
+            Audio chunk as numpy array
 
         Raises:
             RuntimeError: If not recording
         """
-        if not self._recording or not self.stream:
+        if not self._recording:
             raise RuntimeError("Not recording")
 
-        data = self.stream.read(self.chunk_size, exception_on_overflow=False)
+        # Record audio chunk
+        data = sd.rec(
+            self.chunk_size,
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            dtype='int16',
+            device=self.device_index,
+            blocking=True
+        )
+
+        # Squeeze to remove extra dimensions if mono
+        if self.channels == 1:
+            data = data.squeeze()
+
         self._frames.append(data)
 
         return data
@@ -116,7 +116,7 @@ class AudioRecorder:
             max_duration: Maximum recording duration (seconds)
 
         Returns:
-            Complete audio data as bytes
+            Complete audio data as bytes (int16)
         """
         if not self._recording:
             self.start()
@@ -134,10 +134,10 @@ class AudioRecorder:
             chunks_recorded += 1
 
             # Calculate RMS (volume level)
-            rms = self._calculate_rms(chunk)
+            rms = np.sqrt(np.mean(chunk.astype(float) ** 2))
 
             # Check for silence
-            if rms < self.silence_threshold:
+            if rms < self.silence_threshold * 32768:  # Scale to int16 range
                 silent_chunks_count += 1
                 if silent_chunks_count >= silence_chunks:
                     logger.info(f"Silence detected after {chunks_recorded} chunks")
@@ -161,28 +161,35 @@ class AudioRecorder:
             return
 
         self._recording = False
-
-        # Close stream
-        if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-            self.stream = None
-
-        # Terminate PyAudio
-        if self.audio:
-            self.audio.terminate()
-            self.audio = None
-
         logger.info("Recording stopped")
 
     def get_audio_data(self) -> bytes:
         """
-        Get recorded audio data.
+        Get recorded audio data as bytes.
 
         Returns:
-            Complete audio data as bytes
+            Complete audio data as bytes (int16)
         """
-        return b''.join(self._frames)
+        if not self._frames:
+            return b''
+
+        # Concatenate all frames
+        audio_array = np.concatenate(self._frames)
+
+        # Convert to bytes
+        return audio_array.tobytes()
+
+    def get_audio_array(self) -> np.ndarray:
+        """
+        Get recorded audio data as numpy array.
+
+        Returns:
+            Complete audio data as numpy array
+        """
+        if not self._frames:
+            return np.array([], dtype='int16')
+
+        return np.concatenate(self._frames)
 
     def save_to_wav(self, filename: str):
         """
@@ -191,45 +198,19 @@ class AudioRecorder:
         Args:
             filename: Output file path
         """
-        audio_data = self.get_audio_data()
+        audio_array = self.get_audio_array()
 
-        with wave.open(filename, 'wb') as wf:
-            wf.setnchannels(self.channels)
-            wf.setsampwidth(2)  # 16-bit = 2 bytes
-            wf.setframerate(self.sample_rate)
-            wf.writeframes(audio_data)
+        # Convert int16 to float32 for soundfile
+        audio_float = audio_array.astype(np.float32) / 32768.0
+
+        sf.write(filename, audio_float, self.sample_rate)
 
         logger.info(f"Audio saved to {filename}")
-
-    def _calculate_rms(self, audio_chunk: bytes) -> float:
-        """
-        Calculate RMS (Root Mean Square) of audio chunk.
-
-        Args:
-            audio_chunk: Audio data
-
-        Returns:
-            RMS value (volume level)
-        """
-        # Convert bytes to int16 array
-        count = len(audio_chunk) // 2
-        format_str = f"{count}h"
-        shorts = struct.unpack(format_str, audio_chunk)
-
-        # Calculate RMS
-        sum_squares = sum(s ** 2 for s in shorts)
-        rms = np.sqrt(sum_squares / count)
-
-        return rms
 
     @property
     def is_recording(self) -> bool:
         """Check if currently recording."""
         return self._recording
-
-    def __del__(self):
-        """Cleanup on deletion."""
-        self.stop()
 
 
 class AudioPlayer:
@@ -270,30 +251,40 @@ class AudioPlayer:
         if sample_rate is None:
             sample_rate = self.sample_rate
 
-        # Initialize PyAudio
-        audio = pyaudio.PyAudio()
+        # Convert bytes to numpy array
+        audio_array = np.frombuffer(audio_data, dtype=np.int16)
 
-        try:
-            # Open stream
-            stream = audio.open(
-                format=pyaudio.paInt16,
-                channels=self.channels,
-                rate=sample_rate,
-                output=True,
-                output_device_index=self.device_index
-            )
+        # Convert int16 to float32
+        audio_float = audio_array.astype(np.float32) / 32768.0
 
-            # Play audio
-            stream.write(audio_data)
+        # Play audio
+        sd.play(audio_float, samplerate=sample_rate, device=self.device_index)
+        sd.wait()  # Wait until playback finishes
 
-            # Close stream
-            stream.stop_stream()
-            stream.close()
+        logger.info(f"Played {len(audio_data)} bytes of audio")
 
-            logger.info(f"Played {len(audio_data)} bytes of audio")
+    def play_array(self, audio_array: np.ndarray, sample_rate: Optional[int] = None):
+        """
+        Play audio from numpy array.
 
-        finally:
-            audio.terminate()
+        Args:
+            audio_array: Audio data as numpy array
+            sample_rate: Sample rate (uses default if None)
+        """
+        if sample_rate is None:
+            sample_rate = self.sample_rate
+
+        # Convert to float if needed
+        if audio_array.dtype == np.int16:
+            audio_float = audio_array.astype(np.float32) / 32768.0
+        else:
+            audio_float = audio_array
+
+        # Play audio
+        sd.play(audio_float, samplerate=sample_rate, device=self.device_index)
+        sd.wait()
+
+        logger.info(f"Played {len(audio_array)} samples")
 
     def play_file(self, filename: str):
         """
@@ -302,36 +293,14 @@ class AudioPlayer:
         Args:
             filename: WAV file path
         """
-        with wave.open(filename, 'rb') as wf:
-            # Read parameters
-            channels = wf.getnchannels()
-            sample_rate = wf.getframerate()
-            audio_data = wf.readframes(wf.getnframes())
+        # Read audio file
+        audio_data, sample_rate = sf.read(filename)
 
-        # Initialize PyAudio
-        audio = pyaudio.PyAudio()
+        # Play audio
+        sd.play(audio_data, samplerate=sample_rate, device=self.device_index)
+        sd.wait()
 
-        try:
-            # Open stream
-            stream = audio.open(
-                format=audio.get_format_from_width(wf.getsampwidth()),
-                channels=channels,
-                rate=sample_rate,
-                output=True,
-                output_device_index=self.device_index
-            )
-
-            # Play audio
-            stream.write(audio_data)
-
-            # Close stream
-            stream.stop_stream()
-            stream.close()
-
-            logger.info(f"Played file: {filename}")
-
-        finally:
-            audio.terminate()
+        logger.info(f"Played file: {filename}")
 
 
 def list_audio_devices() -> dict:
@@ -341,35 +310,27 @@ def list_audio_devices() -> dict:
     Returns:
         Dictionary with 'input' and 'output' device lists
     """
-    audio = pyaudio.PyAudio()
-
     devices = {
         'input': [],
         'output': []
     }
 
-    try:
-        for i in range(audio.get_device_count()):
-            device_info = audio.get_device_info_by_index(i)
+    for i, device in enumerate(sd.query_devices()):
+        if device['max_input_channels'] > 0:
+            devices['input'].append({
+                'index': i,
+                'name': device['name'],
+                'channels': device['max_input_channels'],
+                'sample_rate': int(device['default_samplerate'])
+            })
 
-            if device_info['maxInputChannels'] > 0:
-                devices['input'].append({
-                    'index': i,
-                    'name': device_info['name'],
-                    'channels': device_info['maxInputChannels'],
-                    'sample_rate': int(device_info['defaultSampleRate'])
-                })
-
-            if device_info['maxOutputChannels'] > 0:
-                devices['output'].append({
-                    'index': i,
-                    'name': device_info['name'],
-                    'channels': device_info['maxOutputChannels'],
-                    'sample_rate': int(device_info['defaultSampleRate'])
-                })
-
-    finally:
-        audio.terminate()
+        if device['max_output_channels'] > 0:
+            devices['output'].append({
+                'index': i,
+                'name': device['name'],
+                'channels': device['max_output_channels'],
+                'sample_rate': int(device['default_samplerate'])
+            })
 
     return devices
 
@@ -381,25 +342,20 @@ def get_default_devices() -> dict:
     Returns:
         Dictionary with 'input' and 'output' device info
     """
-    audio = pyaudio.PyAudio()
+    default_input = sd.query_devices(kind='input')
+    default_output = sd.query_devices(kind='output')
 
-    try:
-        default_input = audio.get_default_input_device_info()
-        default_output = audio.get_default_output_device_info()
-
-        return {
-            'input': {
-                'index': default_input['index'],
-                'name': default_input['name'],
-                'channels': default_input['maxInputChannels'],
-                'sample_rate': int(default_input['defaultSampleRate'])
-            },
-            'output': {
-                'index': default_output['index'],
-                'name': default_output['name'],
-                'channels': default_output['maxOutputChannels'],
-                'sample_rate': int(default_output['defaultSampleRate'])
-            }
+    return {
+        'input': {
+            'index': default_input['index'] if isinstance(default_input, dict) else 0,
+            'name': default_input['name'],
+            'channels': default_input['max_input_channels'],
+            'sample_rate': int(default_input['default_samplerate'])
+        },
+        'output': {
+            'index': default_output['index'] if isinstance(default_output, dict) else 0,
+            'name': default_output['name'],
+            'channels': default_output['max_output_channels'],
+            'sample_rate': int(default_output['default_samplerate'])
         }
-    finally:
-        audio.terminate()
+    }
