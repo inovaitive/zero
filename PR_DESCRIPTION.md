@@ -100,6 +100,11 @@ For developers:
 
 ## Recent Updates
 
+**STT Test Fix (commit 489a1bb)**
+- Fixed "No transcription returned" error by using transcribe_file() instead of transcribe_bytes()
+- WAV file format is more reliable for Deepgram API compatibility
+- Ensures proper audio format headers are sent to Deepgram
+
 **TTS Vocoder Fix (commit cecd659)**
 - Removed vocoder_name parameter for Coqui TTS 0.22.0 compatibility
 - Fixes error: "TTS.__init__() got an unexpected keyword argument 'vocoder_name'"
@@ -124,5 +129,5 @@ For developers:
 ---
 
 **Tested on**: macOS with sounddevice 0.4.6, Python 3.10+, pvporcupine 3.0.5, TTS 0.22.0
-**Related commits**: 9d7ab3f, 9ec3b03, d20b596, 23c970a, cecd659
+**Related commits**: 9d7ab3f, 9ec3b03, d20b596, 23c970a, cecd659, 489a1bb
 **Branch**: `claude/zero-assistant-planning-01LgqqSKyNncLLBjUjrNJwu9` → `main`

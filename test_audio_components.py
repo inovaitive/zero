@@ -186,23 +186,19 @@ def test_stt():
         temp_path = temp_file.name
         temp_file.close()
 
-        recorder._frames = []  # Reset frames to save just this recording
         import numpy as np
         audio_array = np.frombuffer(audio_data, dtype=np.int16)
         import soundfile as sf
         sf.write(temp_path, audio_array.astype(np.float32) / 32768.0, 16000)
         print(f"💾 Audio saved to: {temp_path}")
 
-        # Transcribe
+        # Transcribe using the WAV file (more reliable than raw bytes)
         print("\n📝 Transcribing with Deepgram...")
 
         stt = SpeechToText(api_key=api_key, model="nova-2")
-        transcript = stt.transcribe_bytes(
-            audio_data,
-            sample_rate=16000,
-            channels=1,
-            encoding="linear16"
-        )
+
+        # Use transcribe_file for better compatibility
+        transcript = stt.transcribe_file(temp_path)
 
         if transcript:
             print(f"\n✨ Transcription: '{transcript}'")
