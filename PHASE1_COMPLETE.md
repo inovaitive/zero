@@ -192,17 +192,16 @@ Get your keys:
 
 ### System Dependencies (macOS)
 ```bash
-# PortAudio (required for PyAudio)
-brew install portaudio
-
 # FFmpeg (optional, for audio format conversion)
 brew install ffmpeg
+
+# Note: sounddevice is used for audio I/O (no PortAudio needed!)
 ```
 
 ### System Dependencies (Windows)
 ```bash
-# PyAudio wheels are pre-compiled, should work out of the box
-# If issues, install Visual C++ Build Tools
+# sounddevice is used for audio I/O (no additional dependencies needed)
+# All audio libraries should work out of the box
 ```
 
 ## 🚀 Quick Start
@@ -334,16 +333,14 @@ audio:
 - For faster synthesis, enable caching in config
 - Try smaller model: `tts_models/en/ljspeech/vits`
 
-### PyAudio Installation Issues
+### Audio Device Issues
 ```bash
-# macOS
-brew install portaudio
-uv pip install pyaudio
+# List available audio devices
+uv run python test_audio_components.py
+# Choose option 1 to see all input/output devices
 
-# Windows
-# Usually works out of the box, but if not:
-pip install pipwin
-pipwin install pyaudio
+# If issues persist, verify sounddevice installation:
+uv pip install sounddevice soundfile numpy
 ```
 
 ## 📚 Next Steps
