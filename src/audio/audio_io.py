@@ -280,13 +280,26 @@ class AudioRecorder:
         Save recorded audio to WAV file.
 
         Args:
-            filename: Output file path
+            filename: Output file path (relative paths default to data/cache/)
         """
         audio_data = self.get_audio_data()
 
         if not audio_data:
             logger.warning("No audio data to save")
             return
+
+        # Default to data/cache/ for relative paths
+        filepath = Path(filename)
+        if not filepath.is_absolute():
+            # Ensure data/cache directory exists
+            cache_dir = Path("data/cache")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            # Use data/cache/ as default location for relative paths
+            filepath = cache_dir / filepath.name
+            filename = str(filepath)
+
+        # Ensure parent directory exists
+        filepath.parent.mkdir(parents=True, exist_ok=True)
 
         # Write WAV file
         with wave.open(filename, 'wb') as wf:

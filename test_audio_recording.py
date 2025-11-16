@@ -14,7 +14,7 @@ from src.audio.audio_io import (
     list_audio_devices,
     get_default_devices,
     SOUNDDEVICE_AVAILABLE,
-    PYAUDIO_AVAILABLE  # Backward compatibility
+    PYAUDIO_AVAILABLE,  # Backward compatibility
 )
 
 
@@ -35,12 +35,12 @@ def test_audio_devices():
     devices = list_audio_devices()
 
     print(f"Found {len(devices['input'])} input device(s):")
-    for dev in devices['input']:
+    for dev in devices["input"]:
         print(f"  [{dev['index']}] {dev['name']}")
         print(f"      Channels: {dev['channels']}, Sample Rate: {dev['sample_rate']} Hz")
 
     print(f"\nFound {len(devices['output'])} output device(s):")
-    for dev in devices['output']:
+    for dev in devices["output"]:
         print(f"  [{dev['index']}] {dev['name']}")
         print(f"      Channels: {dev['channels']}, Sample Rate: {dev['sample_rate']} Hz")
 
@@ -69,11 +69,7 @@ def test_recording():
     try:
         # Create recorder
         print("Creating AudioRecorder...")
-        recorder = AudioRecorder(
-            sample_rate=16000,
-            channels=1,
-            chunk_size=1024
-        )
+        recorder = AudioRecorder(sample_rate=16000, channels=1, chunk_size=1024)
         print("✅ AudioRecorder created successfully\n")
 
         # Test recording
@@ -104,7 +100,7 @@ def test_recording():
         print(f"   Array shape: {audio_array.shape}")
         print(f"   Duration: {len(audio_data) / (16000 * 2):.2f} seconds")
 
-        # Save to file
+        # Save to file (will default to data/cache/)
         output_file = "test_recording.wav"
         recorder.save_to_wav(output_file)
         print(f"✅ Saved to {output_file}")
@@ -114,6 +110,7 @@ def test_recording():
     except Exception as e:
         print(f"\n❌ Recording test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False, None
 
@@ -144,6 +141,7 @@ def test_playback(audio_file):
     except Exception as e:
         print(f"\n❌ Playback test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -161,10 +159,7 @@ def test_silence_detection():
     try:
         print("Creating AudioRecorder with VAD...")
         recorder = AudioRecorder(
-            sample_rate=16000,
-            channels=1,
-            silence_threshold=0.02,
-            silence_duration=1.5
+            sample_rate=16000, channels=1, silence_threshold=0.02, silence_duration=1.5
         )
         print("✅ AudioRecorder created with VAD\n")
 
@@ -181,7 +176,7 @@ def test_silence_detection():
         print(f"   Recording stopped after silence detected")
         print(f"   Duration: {duration:.2f} seconds")
 
-        # Save
+        # Save (will default to data/cache/)
         output_file = "test_vad_recording.wav"
         recorder.save_to_wav(output_file)
         print(f"✅ Saved to {output_file}")
@@ -191,6 +186,7 @@ def test_silence_detection():
     except Exception as e:
         print(f"\n❌ VAD test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
