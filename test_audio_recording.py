@@ -13,7 +13,8 @@ from src.audio.audio_io import (
     AudioPlayer,
     list_audio_devices,
     get_default_devices,
-    PYAUDIO_AVAILABLE
+    SOUNDDEVICE_AVAILABLE,
+    PYAUDIO_AVAILABLE  # Backward compatibility
 )
 
 
@@ -23,12 +24,12 @@ def test_audio_devices():
     print("Testing Audio Device Enumeration")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
-        print("Install with: pip install pyaudio")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
+        print("Install with: uv pip install sounddevice")
         return False
 
-    print("✅ PyAudio is available\n")
+    print("✅ SoundDevice is available\n")
 
     # List all devices
     devices = list_audio_devices()
@@ -61,9 +62,9 @@ def test_recording():
     print("Testing Audio Recording")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
-        return False
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
+        return False, None
 
     try:
         # Create recorder
@@ -123,8 +124,8 @@ def test_playback(audio_file):
     print("Testing Audio Playback")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
         return False
 
     try:
@@ -153,8 +154,8 @@ def test_silence_detection():
     print("Testing Voice Activity Detection (VAD)")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
         return False
 
     try:
@@ -198,7 +199,7 @@ def main():
     """Run all tests."""
     print("\n")
     print("╔" + "=" * 58 + "╗")
-    print("║" + " " * 10 + "PyAudio Audio I/O Test Suite" + " " * 20 + "║")
+    print("║" + " " * 10 + "SoundDevice Audio I/O Test Suite" + " " * 18 + "║")
     print("╚" + "=" * 58 + "╝")
     print()
 
