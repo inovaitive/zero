@@ -143,22 +143,22 @@ class ZeroEngine:
         # Initialize NLU components (if not provided)
         if not self.intent_classifier:
             from src.brain.intent import create_intent_classifier
-            self.intent_classifier = create_intent_classifier(self.config.data)
+            self.intent_classifier = create_intent_classifier(self.config.get_all())
             logger.info("Intent classifier initialized")
 
         if not self.entity_extractor:
             from src.brain.entities import create_entity_extractor
-            self.entity_extractor = create_entity_extractor(self.config.data)
+            self.entity_extractor = create_entity_extractor(self.config.get_all())
             logger.info("Entity extractor initialized")
 
         if not self.context_manager:
             from src.brain.context import create_context_manager
-            self.context_manager = create_context_manager(self.config.data)
+            self.context_manager = create_context_manager(self.config.get_all())
             logger.info("Context manager initialized")
 
         # Initialize skills (if not provided)
         if not self.skill_manager:
-            self.skill_manager = SkillManager(config=self.config.data, auto_discover=True)
+            self.skill_manager = SkillManager(config=self.config.get_all(), auto_discover=True)
             logger.info(f"Skill manager initialized with {len(self.skill_manager.skills)} skills")
 
         logger.info("All components initialized successfully")
@@ -311,9 +311,9 @@ class ZeroEngine:
 
             # Step 4: Execute skill
             logger.debug(f"Routing to skill manager...")
-            skill_response = self.skill_manager.execute_intent(
+            skill_response = self.skill_manager.route_intent(
                 intent=intent,
-                entities=entity_result,
+                entities=entities,
                 context=context
             )
 
@@ -330,7 +330,8 @@ class ZeroEngine:
             # Apply any context updates from skill
             if skill_response.context_update:
                 for key, value in skill_response.context_update.items():
-                    self.context_manager.set(key, value)
+                    # Use set_preference for context updates (preferences or other context data)
+                    self.context_manager.set_preference(key, value)
 
             # State: RESPONDING
             self.state_manager.transition_to(AssistantState.RESPONDING)

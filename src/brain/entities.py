@@ -92,8 +92,8 @@ class EntityExtractor:
             try:
                 self.nlp = spacy.load(spacy_model)
                 logger.info(f"Loaded spaCy model for entity extraction: {spacy_model}")
-            except OSError:
-                logger.warning(f"spaCy model '{spacy_model}' not found - using custom extractors only")
+            except Exception as e:
+                logger.warning(f"spaCy model '{spacy_model}' could not be loaded ({e}) - using custom extractors only")
 
         # Common app name mappings
         self.app_aliases = {

@@ -130,10 +130,29 @@ Respond with JSON:
         self.client = None
         if OPENAI_AVAILABLE and api_key:
             try:
+                # Initialize OpenAI client
+                # Note: Newer versions of OpenAI SDK (1.12.0+) are compatible with newer httpx versions
+                # that removed the 'proxies' parameter. If you see proxy-related errors, update openai package.
                 self.client = OpenAI(api_key=api_key)
                 logger.info(f"OpenAI client initialized with model: {model}")
+            except (TypeError, ValueError) as e:
+                # Handle parameter errors (e.g., proxies parameter not supported in older SDK versions)
+                # This can happen with version mismatches between openai and httpx packages
+                error_msg = str(e)
+                if 'proxies' in error_msg.lower():
+                    logger.warning(
+                        f"OpenAI client initialization failed due to 'proxies' parameter error: {e}\n"
+                        "This is usually caused by incompatible versions of 'openai' and 'httpx' packages.\n"
+                        "Please update the 'openai' package: pip install --upgrade openai"
+                    )
+                else:
+                    logger.warning(f"OpenAI client initialization failed with parameter error: {e}")
+                logger.warning("Continuing without OpenAI cloud features - local processing only")
+                self.client = None
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI client: {e}")
+                logger.warning("Continuing without OpenAI cloud features")
+                self.client = None
         else:
             if not OPENAI_AVAILABLE:
                 logger.warning("OpenAI SDK not available")
