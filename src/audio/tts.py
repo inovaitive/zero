@@ -35,7 +35,6 @@ class TextToSpeech:
     def __init__(
         self,
         model_name: str = "tts_models/en/ljspeech/tacotron2-DDC",
-        vocoder_name: Optional[str] = "vocoder_models/en/ljspeech/hifigan_v2",
         use_cuda: bool = False,
         speed: float = 1.0
     ):
@@ -44,7 +43,6 @@ class TextToSpeech:
 
         Args:
             model_name: TTS model name (female voice recommended)
-            vocoder_name: Vocoder model name (for quality)
             use_cuda: Use GPU acceleration if available
             speed: Speech speed multiplier (0.5 = slower, 2.0 = faster)
 
@@ -57,7 +55,6 @@ class TextToSpeech:
             )
 
         self.model_name = model_name
-        self.vocoder_name = vocoder_name
         self.use_cuda = use_cuda
         self.speed = speed
 
@@ -68,11 +65,8 @@ class TextToSpeech:
             # Suppress TTS logs
             os.environ["TTS_LOG_LEVEL"] = "ERROR"
 
-            # Initialize TTS with model and vocoder
-            if vocoder_name:
-                self.tts = TTS(model_name=model_name, vocoder_name=vocoder_name)
-            else:
-                self.tts = TTS(model_name=model_name)
+            # Initialize TTS (vocoder is automatically selected in TTS 0.22.0+)
+            self.tts = TTS(model_name=model_name)
 
             # Move to GPU if requested
             if use_cuda:
@@ -214,7 +208,6 @@ class CachedTTS(TextToSpeech):
     def __init__(
         self,
         model_name: str = "tts_models/en/ljspeech/tacotron2-DDC",
-        vocoder_name: Optional[str] = "vocoder_models/en/ljspeech/hifigan_v2",
         use_cuda: bool = False,
         speed: float = 1.0,
         cache_dir: Optional[str] = None
@@ -224,12 +217,11 @@ class CachedTTS(TextToSpeech):
 
         Args:
             model_name: TTS model name
-            vocoder_name: Vocoder model name
             use_cuda: Use GPU acceleration
             speed: Speech speed multiplier
             cache_dir: Directory for cache files (None = use data/cache/tts)
         """
-        super().__init__(model_name, vocoder_name, use_cuda, speed)
+        super().__init__(model_name, use_cuda, speed)
 
         # Cache directory
         if cache_dir is None:
@@ -296,19 +288,15 @@ def create_tts(
     Returns:
         TextToSpeech or CachedTTS instance
     """
-    vocoder_name = "vocoder_models/en/ljspeech/hifigan_v2"
-
     if use_cache:
         return CachedTTS(
             model_name=model_name,
-            vocoder_name=vocoder_name,
             use_cuda=use_cuda,
             speed=speed
         )
     else:
         return TextToSpeech(
             model_name=model_name,
-            vocoder_name=vocoder_name,
             use_cuda=use_cuda,
             speed=speed
         )

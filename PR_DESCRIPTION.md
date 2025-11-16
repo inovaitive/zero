@@ -100,6 +100,11 @@ For developers:
 
 ## Recent Updates
 
+**TTS Vocoder Fix (commit cecd659)**
+- Removed vocoder_name parameter for Coqui TTS 0.22.0 compatibility
+- Fixes error: "TTS.__init__() got an unexpected keyword argument 'vocoder_name'"
+- TTS 0.22.0+ automatically selects the appropriate vocoder for each model
+
 **STT Test Improvements (commit 23c970a)**
 - Improved silence detection threshold (0.01 → 0.02) for better audio capture
 - Added audio duration display and minimum length check
@@ -118,6 +123,6 @@ For developers:
 
 ---
 
-**Tested on**: macOS with sounddevice 0.4.6, Python 3.10+, pvporcupine 3.0.5
-**Related commits**: 9d7ab3f, 9ec3b03, d20b596, 23c970a
+**Tested on**: macOS with sounddevice 0.4.6, Python 3.10+, pvporcupine 3.0.5, TTS 0.22.0
+**Related commits**: 9d7ab3f, 9ec3b03, d20b596, 23c970a, cecd659
 **Branch**: `claude/zero-assistant-planning-01LgqqSKyNncLLBjUjrNJwu9` → `main`
