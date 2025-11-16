@@ -33,7 +33,7 @@ dependencies = [
     "pydub==0.25.1",
     # Natural Language Understanding (NLU)
     "spacy==3.7.2",
-    "openai==1.6.0",
+    "openai>=1.12.0",
     "dateparser>=1.1.0,<1.2.0",
     # Skills - Weather
     "requests==2.31.0",
@@ -56,6 +56,7 @@ dependencies = [
     "Pillow==10.2.0",
     # Frontend - Notifications
     "plyer==2.1.0",
+    "en-core-web-sm",
 ]
 
 [project.optional-dependencies]
@@ -172,6 +173,9 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" }
 
 [dependency-groups]
 dev = [

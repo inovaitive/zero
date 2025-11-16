@@ -36,9 +36,11 @@ except ImportError:
 try:
     from plyer import notification
     PLYER_AVAILABLE = True
-except ImportError:
+except (ImportError, ModuleNotFoundError) as e:
+    # On macOS, plyer might fail if pyobjus is not installed
+    # This is non-critical - we can continue without notifications
     PLYER_AVAILABLE = False
-    logger.warning("plyer not available - no system notifications")
+    logger.warning(f"plyer not available - no system notifications: {e}")
 
 
 @dataclass

@@ -90,6 +90,7 @@ class IntentClassifier:
         spacy_model: str = "en_core_web_sm",
         confidence_threshold: float = 0.8,
         use_cloud_fallback: bool = False,
+        llm_client: Optional[Any] = None,
     ):
         """
         Initialize intent classifier.
@@ -99,9 +100,11 @@ class IntentClassifier:
             spacy_model: spaCy model name
             confidence_threshold: Minimum confidence for local classification
             use_cloud_fallback: Whether to use cloud AI for low-confidence results
+            llm_client: Optional LLM client for cloud fallback
         """
         self.confidence_threshold = confidence_threshold
         self.use_cloud_fallback = use_cloud_fallback
+        self.llm_client = llm_client
 
         # Initialize spaCy if available and requested
         self.nlp = None
@@ -112,8 +115,8 @@ class IntentClassifier:
                 self.matcher = Matcher(self.nlp.vocab)
                 self._setup_spacy_patterns()
                 logger.info(f"Loaded spaCy model: {spacy_model}")
-            except OSError:
-                logger.warning(f"spaCy model '{spacy_model}' not found - using pattern matching only")
+            except Exception as e:
+                logger.warning(f"spaCy model '{spacy_model}' could not be loaded ({e}) - using pattern matching only")
 
         # Initialize intent patterns
         self._setup_patterns()
@@ -293,9 +296,13 @@ class IntentClassifier:
 
         # If still low confidence and cloud fallback enabled, use cloud
         if result.confidence < self.confidence_threshold and self.use_cloud_fallback:
-            logger.debug(f"Low confidence ({result.confidence:.2f}), would use cloud fallback")
-            # Cloud classification will be implemented later
-            # For now, return the best local result
+            logger.debug(f"Low confidence ({result.confidence:.2f}), using cloud fallback")
+            cloud_result = self._classify_with_cloud(text)
+            if cloud_result and cloud_result.confidence > result.confidence:
+                logger.info(f"Cloud classification improved confidence: {result.confidence:.2f} -> {cloud_result.confidence:.2f}")
+                return cloud_result
+            elif cloud_result:
+                logger.debug(f"Cloud classification confidence ({cloud_result.confidence:.2f}) not better than local, using local result")
 
         logger.debug(f"Final intent: {result.intent.value} ({result.confidence:.2f})")
         return result
@@ -380,6 +387,72 @@ class IntentClassifier:
             raw_text=text
         )
 
+    def _classify_with_cloud(self, text: str) -> Optional[IntentResult]:
+        """
+        Classify intent using cloud LLM (OpenAI).
+
+        Args:
+            text: User input text
+
+        Returns:
+            IntentResult from cloud classification, or None if unavailable
+        """
+        if not self.llm_client or not self.llm_client.is_available():
+            logger.debug("LLM client not available for cloud classification")
+            return None
+
+        try:
+            # Use LLM client to classify intent
+            llm_response = self.llm_client.classify_intent(text)
+            
+            if llm_response.intent and llm_response.metadata.get('error') is None:
+                # Map string intent to IntentType enum
+                intent_str = llm_response.intent
+                confidence = llm_response.metadata.get('confidence', 0.7)
+                
+                # Try to find matching IntentType
+                intent_type = None
+                for intent_enum in IntentType:
+                    if intent_enum.value == intent_str:
+                        intent_type = intent_enum
+                        break
+                
+                # If no exact match, try to infer from the string
+                if intent_type is None:
+                    # Handle common variations
+                    if 'weather' in intent_str.lower():
+                        intent_type = IntentType.WEATHER_QUERY
+                    elif 'timer' in intent_str.lower() and 'set' in intent_str.lower():
+                        intent_type = IntentType.TIMER_SET
+                    elif 'timer' in intent_str.lower() and 'cancel' in intent_str.lower():
+                        intent_type = IntentType.TIMER_CANCEL
+                    elif 'app' in intent_str.lower() and 'open' in intent_str.lower():
+                        intent_type = IntentType.APP_OPEN
+                    elif 'greeting' in intent_str.lower() or 'hello' in intent_str.lower():
+                        intent_type = IntentType.SMALLTALK_GREETING
+                    elif 'thanks' in intent_str.lower() or 'thank' in intent_str.lower():
+                        intent_type = IntentType.SMALLTALK_THANKS
+                    else:
+                        intent_type = IntentType.UNKNOWN
+                
+                return IntentResult(
+                    intent=intent_type,
+                    confidence=float(confidence),
+                    method='cloud_llm',
+                    raw_text=text,
+                    metadata={
+                        'llm_model': llm_response.metadata.get('model', 'unknown'),
+                        'llm_reasoning': llm_response.content,
+                    }
+                )
+            else:
+                logger.warning(f"Cloud classification failed: {llm_response.metadata.get('error', 'unknown error')}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error in cloud classification: {e}", exc_info=True)
+            return None
+
     def get_intent_info(self, intent: IntentType) -> Dict[str, Any]:
         """
         Get information about an intent type.
@@ -441,9 +514,22 @@ def create_intent_classifier(config: Dict[str, Any] = None) -> IntentClassifier:
     local_config = nlu_config.get('local', {})
     cloud_config = nlu_config.get('cloud', {})
 
+    # Create LLM client if cloud fallback is enabled
+    llm_client = None
+    use_cloud_fallback = cloud_config.get('enabled', False)
+    if use_cloud_fallback:
+        from src.brain.llm import create_llm_client
+        llm_client = create_llm_client(config)
+        if llm_client and llm_client.is_available():
+            logger.info("LLM client initialized for cloud fallback")
+        else:
+            logger.warning("Cloud fallback enabled but LLM client not available - falling back to local only")
+            use_cloud_fallback = False
+
     return IntentClassifier(
         use_spacy=local_config.get('enabled', True),
         spacy_model=local_config.get('spacy_model', 'en_core_web_sm'),
         confidence_threshold=local_config.get('confidence_threshold', 0.8),
-        use_cloud_fallback=cloud_config.get('enabled', False),
+        use_cloud_fallback=use_cloud_fallback,
+        llm_client=llm_client,
     )
