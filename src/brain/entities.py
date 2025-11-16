@@ -137,6 +137,7 @@ class EntityExtractor:
         entities.extend(self._extract_durations(text))
         entities.extend(self._extract_app_names(text))
         entities.extend(self._extract_numbers(text))
+        entities.extend(self._extract_weather_specific(text))
 
         # Remove duplicates (keep highest confidence)
         entities = self._deduplicate_entities(entities)
@@ -361,6 +362,46 @@ class EntityExtractor:
                 confidence=0.95,
                 metadata={'is_float': '.' in number_text}
             ))
+
+        return entities
+
+    def _extract_weather_specific(self, text: str) -> List[Entity]:
+        """Extract weather-specific entities (units, conditions, etc.)."""
+        entities = []
+
+        # Temperature units
+        if re.search(r'\b(celsius|fahrenheit|°c|°f)\b', text, re.IGNORECASE):
+            unit_match = re.search(r'\b(celsius|fahrenheit|°c|°f)\b', text, re.IGNORECASE)
+            if unit_match:
+                unit_text = unit_match.group(1).lower()
+                if 'c' in unit_text or 'celsius' in unit_text:
+                    entities.append(Entity(
+                        entity_type='temperature_unit',
+                        value='metric',
+                        text=unit_text,
+                        confidence=0.95,
+                        metadata={'unit': 'celsius'}
+                    ))
+                elif 'f' in unit_text or 'fahrenheit' in unit_text:
+                    entities.append(Entity(
+                        entity_type='temperature_unit',
+                        value='imperial',
+                        text=unit_text,
+                        confidence=0.95,
+                        metadata={'unit': 'fahrenheit'}
+                    ))
+
+        # Weather conditions
+        weather_conditions = ['rain', 'snow', 'sunny', 'cloudy', 'storm', 'fog', 'wind']
+        for condition in weather_conditions:
+            if re.search(rf'\b{condition}(y|ing)?\b', text, re.IGNORECASE):
+                entities.append(Entity(
+                    entity_type='weather_condition',
+                    value=condition,
+                    text=condition,
+                    confidence=0.85,
+                    metadata={'condition_type': condition}
+                ))
 
         return entities
 
