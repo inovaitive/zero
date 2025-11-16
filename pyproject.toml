@@ -37,7 +37,7 @@ dependencies = [
     # Natural Language Understanding (NLU)
     "spacy==3.7.2",
     "openai==1.6.0",
-    "dateparser==1.2.0",
+    "dateparser>=1.1.0,<1.2.0",
 
     # Skills - Weather
     "requests==2.31.0",
