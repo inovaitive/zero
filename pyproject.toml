@@ -37,7 +37,7 @@ dependencies = [
     # Natural Language Understanding (NLU)
     "spacy==3.7.2",
     "openai==1.6.0",
-    "dateparser==1.2.0",
+    "dateparser==1.1.8",
 
     # Skills - Weather
     "requests==2.31.0",
@@ -99,6 +99,9 @@ Issues = "https://github.com/inovaitive/zero/issues"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.black]
 line-length = 100
