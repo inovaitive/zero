@@ -912,7 +912,7 @@ zero/
 
 ```txt
 # Core
-python>=3.9
+python>=3.10  # Required for Deepgram SDK 3.2.0
 
 # Audio - Wake Word
 pvporcupine==2.2.0

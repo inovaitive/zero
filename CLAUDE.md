@@ -103,7 +103,7 @@ uv run python scripts/dev_watch.py
 ### Technology Stack
 
 **Backend (Voice & AI Processing)**
-- **Language**: Python 3.9+
+- **Language**: Python 3.10+ (required for Deepgram SDK)
 - **Wake Word**: pvporcupine (Picovoice)
 - **STT**: Deepgram API (streaming + pre-recorded)
 - **TTS**: Coqui TTS (local, high-quality neural voices)
