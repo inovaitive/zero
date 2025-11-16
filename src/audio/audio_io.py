@@ -21,9 +21,8 @@ from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-# For backward compatibility - sounddevice is always available if imported
+# Audio backend is sounddevice (cross-platform)
 SOUNDDEVICE_AVAILABLE = True
-PYAUDIO_AVAILABLE = True  # For backward compatibility - now uses sounddevice
 
 
 class AudioRecorder:

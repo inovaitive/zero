@@ -56,7 +56,6 @@ dependencies = [
     "Pillow==10.2.0",
     # Frontend - Notifications
     "plyer==2.1.0",
-    "pyaudio>=0.2.14",
 ]
 
 [project.optional-dependencies]
