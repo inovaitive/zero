@@ -80,13 +80,27 @@ python scripts/dev_watch.py
 ## Architecture Overview
 
 ### Technology Stack
-- **Language**: Python 3.8+
+
+**Backend (Voice & AI Processing)**
+- **Language**: Python 3.9+
 - **Wake Word**: pvporcupine (Picovoice)
-- **STT**: Faster-Whisper (primary), Vosk (fallback), OpenAI Whisper API (optional)
-- **NLU**: spaCy + pattern matching (local), GPT-3.5-turbo (cloud fallback)
-- **TTS**: pyttsx3 (primary), Coqui TTS (optional), ElevenLabs (premium)
+- **STT**: Deepgram API (streaming + pre-recorded)
+- **TTS**: Coqui TTS (local, high-quality neural voices)
+- **NLU**: spaCy (local patterns) + OpenAI GPT-4/Ollama (cloud reasoning)
+- **Weather**: OpenWeatherMap API
+- **App Control**: psutil + platform-specific (AppKit for macOS, pywin32 for Windows)
 - **Config**: YAML-based configuration
 - **Testing**: pytest
+
+**Frontend (User Interface)**
+- **CLI**: Rich library (beautiful terminal UI with live updates)
+- **System Tray**: pystray (cross-platform tray icon)
+- **Notifications**: plyer (cross-platform notifications)
+- **GUI**: PyQt6 or Tkinter (optional)
+
+**Platform Support**
+- macOS (10.14+)
+- Windows (10/11)
 
 ### Project Structure
 ```
@@ -113,7 +127,9 @@ zero/
 │   │   ├── app_control_skill.py
 │   │   └── small_talk_skill.py
 │   └── ui/                # User interfaces
-│       ├── cli.py         # Command-line interface
+│       ├── cli.py         # Command-line interface (Rich-based)
+│       ├── tray.py        # System tray integration
+│       ├── visualizer.py  # Audio visualizations (optional)
 │       └── gui.py         # GUI (optional)
 ├── config/                # Configuration files
 │   ├── config.yaml        # Main configuration
@@ -160,25 +176,27 @@ zero/
 ```
 User Voice Input
     ↓
-Wake Word Detection (always listening)
+Wake Word Detection (pvporcupine - always listening)
     ↓
-Audio Recording (until silence detected)
+Audio Recording (until silence detected via VAD)
     ↓
-Speech-to-Text (Faster-Whisper/Vosk)
+Speech-to-Text (Deepgram API)
     ↓
-Intent Classification (spaCy/GPT)
+Intent Classification (spaCy patterns + OpenAI GPT/Ollama)
     ↓
-Entity Extraction (extract parameters)
+Entity Extraction (spaCy NER + custom extractors)
     ↓
 Skill Manager (route to appropriate skill)
     ↓
 Skill Execution (perform action)
     ↓
-Response Generation (format with personality)
+Response Generation (format with J.A.R.V.I.S. personality)
     ↓
-Text-to-Speech (pyttsx3/Coqui)
+Text-to-Speech (Coqui TTS)
     ↓
-Audio Output
+Audio Output (speakers)
+    ↓
+Frontend Display (CLI/GUI/System Tray updates)
 ```
 
 ### State Management
@@ -196,10 +214,14 @@ Audio Output
 - User preferences: wake word sensitivity, voice selection, enabled skills
 
 ### External Dependencies
-- **Weather**: wttr.in API (free, no key) or OpenWeatherMap
+- **STT**: Deepgram API (requires API key)
+- **Weather**: OpenWeatherMap API (requires free API key)
+- **NLU**: OpenAI GPT-4 API or Ollama (local LLM - optional for complex queries)
 - **Search**: Web browser automation via `webbrowser` module
-- **App Control**: OS-specific subprocess calls
-- **Optional Cloud NLU**: OpenAI GPT-3.5-turbo API
+- **App Control**:
+  - macOS: AppKit, AppleScript (via subprocess)
+  - Windows: pywin32, taskkill (via subprocess)
+  - Cross-platform: psutil for process management
 
 ---
 
@@ -308,14 +330,27 @@ Skills are auto-discovered and loaded on startup.
 - Verify pvporcupine installation
 
 **Slow STT performance:**
-- Switch to smaller Whisper model ("tiny" or "base")
-- Consider using Vosk instead
+- Check Deepgram API response times
+- Verify internet connection speed
+- Check Deepgram model selection (nova-2 is fastest)
+- Review API quota/usage
+
+**Slow TTS performance:**
+- Switch to faster Coqui TTS model
+- Enable response caching
+- Pre-generate common phrases
 - Check CPU usage
 
 **API rate limits:**
-- Reduce cloud API calls
-- Use local processing mode
-- Implement caching
+- Deepgram: Check usage dashboard
+- OpenAI: Monitor token usage
+- Implement response caching
+- Use local alternatives when possible
+
+**API key issues:**
+- Verify .env file is correctly configured
+- Check API key validity on provider dashboards
+- Ensure proper permissions for API keys
 
 ---
 
