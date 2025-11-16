@@ -50,7 +50,7 @@ dependencies = [
     "pyobjc-framework-ApplicationServices==10.1; sys_platform == 'darwin'",
 
     # Skills - Timer
-    "playsound==1.3.0",
+    "pygame==2.5.2",
 
     # Configuration & Utilities
     "PyYAML==6.0.1",
