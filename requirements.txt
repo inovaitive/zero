@@ -29,7 +29,7 @@ pydub==0.25.1
 spacy==3.7.2
 # Note: After installation, run: python -m spacy download en_core_web_sm
 openai==1.6.0
-dateparser==1.1.8
+dateparser>=1.1.0,<1.2.0,
 
 # ============================================
 # Skills - Weather
