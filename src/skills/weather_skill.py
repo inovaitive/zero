@@ -106,6 +106,7 @@ class WeatherSkill(BaseSkill):
 
         # OpenWeatherMap client
         self.owm = None
+        self.mgr = None  # Initialize weather manager to None
 
         # Check if pyowm is available
         if not PYOWM_AVAILABLE:
@@ -119,12 +120,17 @@ class WeatherSkill(BaseSkill):
             self.enabled = False
         else:
             try:
+                # Initialize OWM client with API key
+                # Note: OpenWeatherMap API keys are typically 32 characters
+                # Format: Just the key string, no special formatting needed
                 self.owm = pyowm.OWM(self.api_key)
                 self.mgr = self.owm.weather_manager()
-                self.logger.info("OpenWeatherMap client initialized")
+                self.logger.info("OpenWeatherMap client initialized successfully")
             except Exception as e:
                 self.logger.error(f"Failed to initialize OpenWeatherMap: {e}")
                 self.enabled = False
+                self.owm = None
+                self.mgr = None
 
     def can_handle(self, intent: str) -> bool:
         """Check if this skill can handle the intent."""
@@ -154,12 +160,15 @@ class WeatherSkill(BaseSkill):
         Returns:
             SkillResponse with weather information
         """
-        if not self.enabled or not self.owm:
+        if not self.enabled or not self.owm or not self.mgr:
             return self._create_error_response(
                 "I apologize, sir, but the weather service is currently unavailable. "
-                "It appears the API key has not been configured."
+                "It appears the API key has not been configured or there was an initialization error."
             )
 
+        # Initialize location to None to handle cases where extraction fails
+        location = None
+        
         try:
             # Extract location from entities
             location = self._extract_location(entities, context)
@@ -197,12 +206,16 @@ class WeatherSkill(BaseSkill):
                 context_update=context_update,
             )
 
-        except NotFoundError:
+        except NotFoundError as e:
+            # Safely handle location in error message
+            location_str = location if location else "the specified location"
+            self.logger.warning(f"Weather not found for {location_str}: {e}")
             return self._create_error_response(
-                f"I apologize, sir, but I could not find weather information for '{location}'. "
+                f"I apologize, sir, but I could not find weather information for '{location_str}'. "
                 "Perhaps you could specify a different location?"
             )
-        except UnauthorizedError:
+        except UnauthorizedError as e:
+            self.logger.error(f"Weather API authentication error: {e}")
             return self._create_error_response(
                 "I apologize, sir, but there seems to be an authentication issue with the weather service. "
                 "Please verify the API key configuration."
@@ -214,9 +227,12 @@ class WeatherSkill(BaseSkill):
                 "Please try again shortly."
             )
         except Exception as e:
-            self.logger.exception(f"Unexpected error in weather skill: {e}")
+            # Log the actual error with location if available
+            location_str = location if location else "unknown location"
+            self.logger.exception(f"Unexpected error in weather skill for {location_str}: {e}")
             return self._create_error_response(
-                "I apologize, sir, but I encountered an unexpected error while retrieving the weather information."
+                f"I apologize, sir, but I encountered an unexpected error while retrieving the weather information for '{location_str}'. "
+                "Please try again or specify a different location."
             )
 
     def _extract_location(self, entities: Dict[str, Any], context: Dict[str, Any]) -> str:
@@ -296,7 +312,9 @@ class WeatherSkill(BaseSkill):
         weather = observation.weather
 
         # Extract weather data
-        temp_dict = weather.temperature(unit=self.units)
+        # Convert units: pyowm expects 'celsius' or 'fahrenheit', not 'metric' or 'imperial'
+        temp_unit = 'celsius' if self.units == 'metric' else 'fahrenheit'
+        temp_dict = weather.temperature(unit=temp_unit)
         wind_dict = weather.wind(unit='meters_sec' if self.units == 'metric' else 'miles_hour')
 
         weather_data = WeatherData(
@@ -333,8 +351,10 @@ class WeatherSkill(BaseSkill):
 
         # Extract forecast data
         forecast_data = []
+        # Convert units: pyowm expects 'celsius' or 'fahrenheit', not 'metric' or 'imperial'
+        temp_unit = 'celsius' if self.units == 'metric' else 'fahrenheit'
         for weather in forecast.weathers[:8]:  # Next 24 hours (8 * 3h intervals)
-            temp_dict = weather.temperature(unit=self.units)
+            temp_dict = weather.temperature(unit=temp_unit)
             forecast_data.append({
                 'time': weather.reference_time('date'),
                 'temperature': temp_dict.get('temp', 0),

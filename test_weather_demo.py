@@ -17,12 +17,12 @@ from src.brain.intent import IntentClassifier
 from src.brain.entities import EntityExtractor
 
 # ANSI color codes for nice output
-GREEN = '\033[92m'
-BLUE = '\033[94m'
-YELLOW = '\033[93m'
-RED = '\033[91m'
-RESET = '\033[0m'
-BOLD = '\033[1m'
+GREEN = "\033[92m"
+BLUE = "\033[94m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
 
 
 def print_header(text):
@@ -60,9 +60,9 @@ def test_weather_skill():
 
     # Check API key
     print_section("1. Checking Configuration")
-    api_key = os.getenv('OPENWEATHERMAP_API_KEY')
+    api_key = os.getenv("OPENWEATHERMAP_API_KEY")
 
-    if not api_key or api_key == 'your_openweathermap_api_key_here':
+    if not api_key or api_key == "your_openweathermap_api_key_here":
         print_error("OpenWeatherMap API key not configured!")
         print_info("Please set OPENWEATHERMAP_API_KEY in your .env file")
         print_info("Get a free API key at: https://openweathermap.org/api")
@@ -77,16 +77,13 @@ def test_weather_skill():
 
     try:
         weather_skill = WeatherSkill(
-            api_key=api_key,
-            default_location="London",
-            units="metric",
-            cache_ttl=300
+            api_key=api_key, default_location="London", units="metric", cache_ttl=300
         )
         print_success("Weather Skill initialized")
 
         intent_classifier = IntentClassifier(
             use_spacy=False,  # Disable spaCy to avoid dependency issues
-            confidence_threshold=0.7
+            confidence_threshold=0.7,
         )
         print_success("Intent Classifier initialized")
 
@@ -101,7 +98,6 @@ def test_weather_skill():
     print_section("3. Testing Weather Queries")
 
     test_queries = [
-        "What's the weather?",
         "What's the weather in New York?",
         "How's the weather in Tokyo?",
         "What's the weather in London?",
@@ -109,12 +105,14 @@ def test_weather_skill():
     ]
 
     for i, query in enumerate(test_queries, 1):
-        print(f"\n{BOLD}Query {i}:{RESET} \"{query}\"")
+        print(f'\n{BOLD}Query {i}:{RESET} "{query}"')
         print("-" * 70)
 
         # Classify intent
         intent_result = intent_classifier.classify(query)
-        print(f"  Intent: {intent_result.intent.value} (confidence: {intent_result.confidence:.2f})")
+        print(
+            f"  Intent: {intent_result.intent.value} (confidence: {intent_result.confidence:.2f})"
+        )
 
         # Extract entities
         entities_result = entity_extractor.extract(query, intent_result.intent.value)
@@ -132,16 +130,17 @@ def test_weather_skill():
             if not mock_mode and weather_skill.enabled:
                 try:
                     response = weather_skill.execute(
-                        intent=intent_result.intent.value,
-                        entities=entities_dict,
-                        context={}
+                        intent=intent_result.intent.value, entities=entities_dict, context={}
                     )
 
                     if response.success:
                         print(f"\n  {GREEN}ZERO:{RESET}")
                         # Wrap text nicely
                         import textwrap
-                        wrapped = textwrap.fill(response.message, width=66, initial_indent="  ", subsequent_indent="  ")
+
+                        wrapped = textwrap.fill(
+                            response.message, width=66, initial_indent="  ", subsequent_indent="  "
+                        )
                         print(f"{GREEN}{wrapped}{RESET}")
                     else:
                         print(f"\n  {RED}Error: {response.message}{RESET}")
@@ -165,9 +164,7 @@ def test_weather_skill():
         # First query (cache miss)
         start = time.time()
         response1 = weather_skill.execute(
-            intent="weather.query",
-            entities={'location': test_location},
-            context={}
+            intent="weather.query", entities={"location": test_location}, context={}
         )
         time1 = (time.time() - start) * 1000
         print(f"  First query (API call): {time1:.2f}ms")
@@ -175,9 +172,7 @@ def test_weather_skill():
         # Second query (cache hit)
         start = time.time()
         response2 = weather_skill.execute(
-            intent="weather.query",
-            entities={'location': test_location},
-            context={}
+            intent="weather.query", entities={"location": test_location}, context={}
         )
         time2 = (time.time() - start) * 1000
         print(f"  Second query (cached):  {time2:.2f}ms")
@@ -210,5 +205,5 @@ def test_weather_skill():
     print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_weather_skill()
