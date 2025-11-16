@@ -19,60 +19,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Environment Setup
 ```bash
-# Create and activate virtual environment
+# Using uv (recommended - 10-100x faster than pip)
+uv sync
+
+# Or manually with uv
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e ".[dev]"
+
+# Alternative: Using pip
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### Running ZERO
 ```bash
-# Start the assistant
-python main.py
+# Start the assistant (with uv)
+uv run python main.py
 
 # Run with specific config
-python main.py --config config/custom_config.yaml
+uv run python main.py --config config/custom_config.yaml
 
 # CLI mode (text input, no voice)
-python main.py --cli-only
+uv run python main.py --cli-only
+
+# If using activated virtual environment
+python main.py
 ```
 
 ### Testing
 ```bash
-# Run all tests
-pytest
+# Run all tests (with uv)
+uv run pytest
 
 # Run specific test file
-pytest tests/test_audio.py
+uv run pytest tests/test_audio.py
 
 # Run with coverage
-pytest --cov=src tests/
+uv run pytest --cov=src tests/
 
 # Run specific test
-pytest tests/test_brain.py::test_intent_classification
+uv run pytest tests/test_brain.py::test_intent_classification
 ```
 
 ### Code Quality
 ```bash
-# Format code
-black src/ tests/
+# Format code with black
+uv run black src/ tests/
 
-# Lint code
-pylint src/
+# Lint code with ruff (faster than pylint)
+uv run ruff check src/ tests/
 
-# Type checking (if using mypy)
-mypy src/
+# Auto-fix with ruff
+uv run ruff check --fix src/ tests/
+
+# Type checking
+uv run mypy src/
 ```
 
 ### Development
 ```bash
 # Install in development mode
-pip install -e .
+uv pip install -e ".[dev]"
+
+# Add a new dependency
+uv add package_name
+
+# Add a dev dependency
+uv add --dev package_name
+
+# Update dependencies
+uv sync
 
 # Watch for changes and auto-restart (if using watchdog)
-python scripts/dev_watch.py
+uv run python scripts/dev_watch.py
 ```
 
 ---

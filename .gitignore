@@ -99,3 +99,6 @@ $RECYCLE.BIN/
 !data/sounds/.gitkeep
 !data/cache/.gitkeep
 !logs/.gitkeep
+
+# uv lock file (optional - can be committed for reproducible builds)
+# uv.lock

@@ -114,39 +114,83 @@ Template for API keys:
 
 ### Next Steps - Installation
 
-1. **Create virtual environment:**
+#### Prerequisites
+
+**Install uv (fast Python package manager):**
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or with pip (if you have Python already)
+pip install uv
+```
+
+#### Quick Start with uv
+
+1. **Install all dependencies:**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   # uv will automatically create .venv and install everything
+   uv sync
    ```
 
-2. **Install dependencies:**
+2. **Download spaCy model:**
    ```bash
-   pip install -r requirements.txt
+   uv run python -m spacy download en_core_web_sm
    ```
 
-3. **Download spaCy model:**
-   ```bash
-   python -m spacy download en_core_web_sm
-   ```
-
-4. **Set up environment variables:**
+3. **Set up environment variables:**
    ```bash
    cp .env.example .env
    # Edit .env and add your API keys
    ```
 
-5. **Test the setup:**
+4. **Test the setup:**
    ```bash
    # Run tests
-   pytest
+   uv run pytest
 
    # Run in CLI-only mode
-   python main.py --cli-only
+   uv run python main.py --cli-only
 
    # Run in voice mode (after Phase 1 complete)
-   python main.py
+   uv run python main.py
    ```
+
+#### Manual Setup with uv
+
+```bash
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+uv pip install -e .
+
+# Install development dependencies (optional)
+uv pip install -e ".[dev]"
+
+# Download spaCy model
+python -m spacy download en_core_web_sm
+```
+
+#### Alternative: Using pip (if not using uv)
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Download spaCy model
+python -m spacy download en_core_web_sm
+```
 
 ### API Keys Required
 
@@ -184,39 +228,50 @@ See `ROADMAP.md` for the complete development plan.
 
 ### Testing
 
-Run tests:
+Run tests with uv:
 ```bash
 # All tests
-pytest
+uv run pytest
 
 # With coverage
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src --cov-report=html
 
 # Specific test file
-pytest tests/test_config.py
+uv run pytest tests/test_config.py
 
 # Verbose output
-pytest -v
+uv run pytest -v
 
 # Skip slow tests
-pytest -m "not slow"
+uv run pytest -m "not slow"
 ```
 
 ### Development
 
 ```bash
-# Format code
-black src/ tests/
+# Format code with black
+uv run black src/ tests/
 
-# Lint code
-pylint src/
+# Lint code with ruff (faster alternative to pylint)
+uv run ruff check src/ tests/
+
+# Format and lint with ruff
+uv run ruff format src/ tests/
 
 # Type checking
-mypy src/
+uv run mypy src/
 
 # Run in debug mode
-python main.py --debug
+uv run python main.py --debug
 ```
+
+### uv Advantages
+
+- **10-100x faster** than pip for package installation
+- **Built-in dependency resolver** - faster conflict resolution
+- **Automatic virtual environment** - creates .venv automatically
+- **Lock files** - uv.lock ensures reproducible builds
+- **Compatible with pip** - works with requirements.txt and pyproject.toml
 
 ---
 
