@@ -915,7 +915,7 @@ zero/
 python>=3.10  # Required for Deepgram SDK 3.2.0
 
 # Audio - Wake Word
-pvporcupine==2.2.0
+pvporcupine==3.0.5
 
 # Audio - STT
 deepgram-sdk==3.2.0
@@ -924,8 +924,10 @@ deepgram-sdk==3.2.0
 TTS==0.22.0  # Coqui TTS
 
 # Audio - I/O
-pyaudio==0.2.14
 sounddevice==0.4.6
+soundfile==0.12.1
+numpy>=1.20.0
+pydub==0.25.1
 
 # NLU
 spacy==3.7.2
