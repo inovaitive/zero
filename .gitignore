@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment Variables & Secrets
+.env
+*.key
+*.pem
+
+# Logs
+logs/*.log
+*.log
+
+# Data & Models
+data/models/*.pt
+data/models/*.pth
+data/models/*.bin
+data/models/*.onnx
+data/cache/*
+!data/cache/.gitkeep
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Documentation builds
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Audio files (temporary)
+*.wav
+*.mp3
+!data/sounds/*.wav
+!data/sounds/*.mp3
+
+# Keep directory structure
+!data/wake_words/.gitkeep
+!data/models/.gitkeep
+!data/sounds/.gitkeep
+!data/cache/.gitkeep
+!logs/.gitkeep
