@@ -5,19 +5,19 @@ ZERO Voice Assistant - Main Entry Point
 A J.A.R.V.I.S.-inspired intelligent voice assistant.
 """
 
-import sys
-import signal
 import argparse
+import signal
+import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.core.config import get_config, ConfigError
-from src.core.state import get_state_manager, AssistantState
-from src.core.logger import setup_logger, get_logger
+from src.core.config import ConfigError, get_config
+from src.core.logger import setup_logger
+from src.core.state import AssistantState, get_state_manager
 from src.ui.cli import create_cli
-from src.ui.tray import create_tray, TRAY_AVAILABLE
+from src.ui.tray import TRAY_AVAILABLE, create_tray
 
 
 class ZeroAssistant:
@@ -44,15 +44,12 @@ class ZeroAssistant:
 
         # Set up logging
         self.logger = setup_logger(
-            name='zero',
-            log_level=self.config.log_level,
-            console_output=True,
-            file_output=True
+            name="zero", log_level=self.config.log_level, console_output=True, file_output=True
         )
 
-        self.logger.info("="*60)
+        self.logger.info("=" * 60)
         self.logger.info("ZERO Assistant Starting...")
-        self.logger.info("="*60)
+        self.logger.info("=" * 60)
 
         # Initialize state manager
         self.state_manager = get_state_manager()
@@ -77,16 +74,16 @@ class ZeroAssistant:
     def _initialize_ui(self):
         """Initialize user interface components."""
         # Create CLI
-        show_logs = self.config.get('ui.cli.show_logs', True)
+        show_logs = self.config.get("ui.cli.show_logs", True)
         self.cli = create_cli(self.state_manager, show_logs=show_logs)
 
         # Create system tray (if enabled and available)
-        if self.config.get('ui.tray.enabled', True) and TRAY_AVAILABLE:
+        if self.config.get("ui.tray.enabled", True) and TRAY_AVAILABLE:
             self.tray = create_tray(
                 self.state_manager,
                 on_start=self._handle_start,
                 on_stop=self._handle_stop,
-                on_exit=self._handle_exit
+                on_exit=self._handle_exit,
             )
 
     def _handle_start(self):
@@ -154,10 +151,10 @@ class ZeroAssistant:
                 if not user_input:
                     continue
 
-                if user_input.lower() in ['exit', 'quit']:
+                if user_input.lower() in ["exit", "quit"]:
                     break
 
-                if user_input.lower() == 'help':
+                if user_input.lower() == "help":
                     self._print_help()
                     continue
 
@@ -190,6 +187,7 @@ class ZeroAssistant:
 
             # For now, just keep running
             import time
+
             while True:
                 time.sleep(1)
 
@@ -239,33 +237,23 @@ def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="ZERO - Intelligent Voice Assistant",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
-        '--config',
+        "--config",
         type=str,
-        metavar='PATH',
-        help='Path to configuration file (default: config/config.yaml)'
+        metavar="PATH",
+        help="Path to configuration file (default: config/config.yaml)",
     )
 
     parser.add_argument(
-        '--cli-only',
-        action='store_true',
-        help='Run in CLI-only mode (text input, no voice)'
+        "--cli-only", action="store_true", help="Run in CLI-only mode (text input, no voice)"
     )
 
-    parser.add_argument(
-        '--debug',
-        action='store_true',
-        help='Enable debug mode'
-    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
-    parser.add_argument(
-        '--version',
-        action='version',
-        version='ZERO Assistant v1.0.0'
-    )
+    parser.add_argument("--version", action="version", version="ZERO Assistant v1.0.0")
 
     return parser.parse_args()
 
@@ -276,13 +264,10 @@ def main():
     args = parse_args()
 
     # Create and run assistant
-    assistant = ZeroAssistant(
-        config_path=args.config,
-        cli_only=args.cli_only
-    )
+    assistant = ZeroAssistant(config_path=args.config, cli_only=args.cli_only)
 
     assistant.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -22,51 +22,41 @@ classifiers = [
 dependencies = [
     # Audio - Wake Word Detection
     "pvporcupine==3.0.5",
-
     # Audio - Speech-to-Text (STT)
     "deepgram-sdk==3.2.0",
-
     # Audio - Text-to-Speech (TTS)
     "TTS==0.22.0",
-
     # Audio - I/O (sounddevice preferred, more reliable on macOS)
     "sounddevice==0.4.6",
     "soundfile==0.12.1",
     "numpy>=1.20.0",
     "pydub==0.25.1",
-
     # Natural Language Understanding (NLU)
     "spacy==3.7.2",
     "openai==1.6.0",
     "dateparser>=1.1.0,<1.2.0",
-
     # Skills - Weather
     "requests==2.31.0",
     "pyowm==3.3.0",
-
     # Skills - App Control
     "psutil==5.9.6",
     "pywin32==306; sys_platform == 'win32'",
     "pyobjc-framework-Cocoa==10.1; sys_platform == 'darwin'",
     "pyobjc-framework-ApplicationServices==10.1; sys_platform == 'darwin'",
-
     # Skills - Timer
     "pygame==2.5.2",
-
     # Configuration & Utilities
     "PyYAML==6.0.1",
     "python-dotenv==1.0.0",
-
     # Frontend - CLI
     "rich==13.7.0",
     "questionary==2.0.1",
-
     # Frontend - System Tray
     "pystray==0.19.5",
     "Pillow==10.2.0",
-
     # Frontend - Notifications
     "plyer==2.1.0",
+    "pyaudio>=0.2.14",
 ]
 
 [project.optional-dependencies]

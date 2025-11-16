@@ -158,12 +158,25 @@ class TextToSpeech:
 
         Args:
             text: Text to convert to speech
-            filename: Output WAV file path
+            filename: Output WAV file path (relative paths default to data/cache/)
 
         Returns:
             True if successful, False otherwise
         """
         try:
+            # Default to data/cache/ for relative paths
+            filepath = Path(filename)
+            if not filepath.is_absolute():
+                # Ensure data/cache directory exists
+                cache_dir = Path("data/cache")
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                # Use data/cache/ as default location for relative paths
+                filepath = cache_dir / filepath.name
+                filename = str(filepath)
+
+            # Ensure parent directory exists
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+
             logger.info(f"Saving TTS to {filename}")
 
             self.tts.tts_to_file(

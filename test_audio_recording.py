@@ -13,7 +13,8 @@ from src.audio.audio_io import (
     AudioPlayer,
     list_audio_devices,
     get_default_devices,
-    PYAUDIO_AVAILABLE
+    SOUNDDEVICE_AVAILABLE,
+    PYAUDIO_AVAILABLE,  # Backward compatibility
 )
 
 
@@ -23,23 +24,23 @@ def test_audio_devices():
     print("Testing Audio Device Enumeration")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
-        print("Install with: pip install pyaudio")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
+        print("Install with: uv pip install sounddevice")
         return False
 
-    print("✅ PyAudio is available\n")
+    print("✅ SoundDevice is available\n")
 
     # List all devices
     devices = list_audio_devices()
 
     print(f"Found {len(devices['input'])} input device(s):")
-    for dev in devices['input']:
+    for dev in devices["input"]:
         print(f"  [{dev['index']}] {dev['name']}")
         print(f"      Channels: {dev['channels']}, Sample Rate: {dev['sample_rate']} Hz")
 
     print(f"\nFound {len(devices['output'])} output device(s):")
-    for dev in devices['output']:
+    for dev in devices["output"]:
         print(f"  [{dev['index']}] {dev['name']}")
         print(f"      Channels: {dev['channels']}, Sample Rate: {dev['sample_rate']} Hz")
 
@@ -61,18 +62,14 @@ def test_recording():
     print("Testing Audio Recording")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
-        return False
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
+        return False, None
 
     try:
         # Create recorder
         print("Creating AudioRecorder...")
-        recorder = AudioRecorder(
-            sample_rate=16000,
-            channels=1,
-            chunk_size=1024
-        )
+        recorder = AudioRecorder(sample_rate=16000, channels=1, chunk_size=1024)
         print("✅ AudioRecorder created successfully\n")
 
         # Test recording
@@ -103,7 +100,7 @@ def test_recording():
         print(f"   Array shape: {audio_array.shape}")
         print(f"   Duration: {len(audio_data) / (16000 * 2):.2f} seconds")
 
-        # Save to file
+        # Save to file (will default to data/cache/)
         output_file = "test_recording.wav"
         recorder.save_to_wav(output_file)
         print(f"✅ Saved to {output_file}")
@@ -113,6 +110,7 @@ def test_recording():
     except Exception as e:
         print(f"\n❌ Recording test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False, None
 
@@ -123,8 +121,8 @@ def test_playback(audio_file):
     print("Testing Audio Playback")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
         return False
 
     try:
@@ -143,6 +141,7 @@ def test_playback(audio_file):
     except Exception as e:
         print(f"\n❌ Playback test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -153,17 +152,14 @@ def test_silence_detection():
     print("Testing Voice Activity Detection (VAD)")
     print("=" * 60)
 
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
         return False
 
     try:
         print("Creating AudioRecorder with VAD...")
         recorder = AudioRecorder(
-            sample_rate=16000,
-            channels=1,
-            silence_threshold=0.02,
-            silence_duration=1.5
+            sample_rate=16000, channels=1, silence_threshold=0.02, silence_duration=1.5
         )
         print("✅ AudioRecorder created with VAD\n")
 
@@ -180,7 +176,7 @@ def test_silence_detection():
         print(f"   Recording stopped after silence detected")
         print(f"   Duration: {duration:.2f} seconds")
 
-        # Save
+        # Save (will default to data/cache/)
         output_file = "test_vad_recording.wav"
         recorder.save_to_wav(output_file)
         print(f"✅ Saved to {output_file}")
@@ -190,6 +186,7 @@ def test_silence_detection():
     except Exception as e:
         print(f"\n❌ VAD test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -198,7 +195,7 @@ def main():
     """Run all tests."""
     print("\n")
     print("╔" + "=" * 58 + "╗")
-    print("║" + " " * 10 + "PyAudio Audio I/O Test Suite" + " " * 20 + "║")
+    print("║" + " " * 10 + "SoundDevice Audio I/O Test Suite" + " " * 18 + "║")
     print("╚" + "=" * 58 + "╝")
     print()
 

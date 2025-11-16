@@ -11,31 +11,31 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from src.audio.audio_io import AudioPlayer, AudioRecorder, get_default_devices, list_audio_devices
+from src.audio.stt import DEEPGRAM_AVAILABLE, SpeechToText
+from src.audio.tts import TTS_AVAILABLE, TextToSpeech
+from src.audio.wake_word import PORCUPINE_AVAILABLE, WakeWordDetector
 from src.core.config import get_config
 from src.core.logger import setup_logger
-from src.audio.audio_io import AudioRecorder, AudioPlayer, list_audio_devices, get_default_devices
-from src.audio.wake_word import WakeWordDetector, PORCUPINE_AVAILABLE
-from src.audio.stt import SpeechToText, DEEPGRAM_AVAILABLE
-from src.audio.tts import TextToSpeech, TTS_AVAILABLE
 
 
 def test_audio_devices():
     """Test 1: List available audio devices."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 1: Audio Devices")
-    print("="*60)
+    print("=" * 60)
 
     print("\n📋 Listing audio devices...")
 
     devices = list_audio_devices()
 
     print(f"\n🎤 Input devices ({len(devices['input'])}):")
-    for i, device in enumerate(devices['input']):
+    for device in devices["input"]:
         print(f"  [{device['index']}] {device['name']}")
         print(f"      Channels: {device['channels']}, Sample rate: {device['sample_rate']}Hz")
 
     print(f"\n🔊 Output devices ({len(devices['output'])}):")
-    for i, device in enumerate(devices['output']):
+    for device in devices["output"]:
         print(f"  [{device['index']}] {device['name']}")
         print(f"      Channels: {device['channels']}, Sample rate: {device['sample_rate']}Hz")
 
@@ -49,9 +49,9 @@ def test_audio_devices():
 
 def test_audio_recording():
     """Test 2: Record and playback audio."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 2: Audio Recording & Playback")
-    print("="*60)
+    print("=" * 60)
 
     print("\n🎤 Recording 3 seconds of audio...")
     print("Say something!")
@@ -60,6 +60,7 @@ def test_audio_recording():
     recorder.start()
 
     import time
+
     for i in range(3, 0, -1):
         print(f"  {i}...")
         time.sleep(1)
@@ -84,9 +85,9 @@ def test_audio_recording():
 
 def test_wake_word():
     """Test 3: Wake word detection."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 3: Wake Word Detection")
-    print("="*60)
+    print("=" * 60)
 
     if not PORCUPINE_AVAILABLE:
         print("\n❌ pvporcupine not installed")
@@ -95,16 +96,16 @@ def test_wake_word():
 
     try:
         config = get_config()
-        access_key = config.get('wake_word.access_key')
+        access_key = config.get("wake_word.access_key")
 
-        if not access_key or access_key.startswith('your_'):
+        if not access_key or access_key.startswith("your_"):
             print("\n❌ Picovoice access key not configured")
             print("   Set PICOVOICE_ACCESS_KEY in .env file")
             return
 
         print("\n👂 Initializing wake word detector...")
-        print(f"   Keyword: jarvis")
-        print(f"   Sensitivity: 0.5")
+        print("   Keyword: jarvis")
+        print("   Sensitivity: 0.5")
 
         detected = [False]
 
@@ -113,10 +114,7 @@ def test_wake_word():
             print("\n🎯 WAKE WORD DETECTED!")
 
         detector = WakeWordDetector(
-            access_key=access_key,
-            keyword="jarvis",
-            sensitivity=0.5,
-            on_detected=on_detected
+            access_key=access_key, keyword="jarvis", sensitivity=0.5, on_detected=on_detected
         )
 
         detector.start()
@@ -126,6 +124,7 @@ def test_wake_word():
         print("   Press Ctrl+C to stop")
 
         import time
+
         try:
             while not detected[0]:
                 time.sleep(0.1)
@@ -143,9 +142,9 @@ def test_wake_word():
 
 def test_stt():
     """Test 4: Speech-to-text."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 4: Speech-to-Text (Deepgram)")
-    print("="*60)
+    print("=" * 60)
 
     if not DEEPGRAM_AVAILABLE:
         print("\n❌ deepgram-sdk not installed")
@@ -154,9 +153,9 @@ def test_stt():
 
     try:
         config = get_config()
-        api_key = config.get('stt.api_key')
+        api_key = config.get("stt.api_key")
 
-        if not api_key or api_key.startswith('your_'):
+        if not api_key or api_key.startswith("your_"):
             print("\n❌ Deepgram API key not configured")
             print("   Set DEEPGRAM_API_KEY in .env file")
             return
@@ -168,12 +167,14 @@ def test_stt():
         recorder = AudioRecorder(
             sample_rate=16000,
             silence_threshold=0.02,  # Increased threshold for better detection
-            silence_duration=2.0      # Wait 2 seconds of silence before stopping
+            silence_duration=2.0,  # Wait 2 seconds of silence before stopping
         )
         audio_data = recorder.record_until_silence(max_duration=10.0)
         recorder.stop()
 
-        print(f"\n✅ Recorded {len(audio_data)} bytes ({len(audio_data) / (16000 * 2):.2f} seconds)")
+        print(
+            f"\n✅ Recorded {len(audio_data)} bytes ({len(audio_data) / (16000 * 2):.2f} seconds)"
+        )
 
         # Check if we got any audio
         if len(audio_data) < 1000:  # Less than ~0.03 seconds
@@ -182,13 +183,16 @@ def test_stt():
 
         # Save to file for debugging
         import tempfile
-        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+
+        temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         temp_path = temp_file.name
         temp_file.close()
 
         import numpy as np
+
         audio_array = np.frombuffer(audio_data, dtype=np.int16)
         import soundfile as sf
+
         sf.write(temp_path, audio_array.astype(np.float32) / 32768.0, 16000)
         print(f"💾 Audio saved to: {temp_path}")
 
@@ -212,9 +216,9 @@ def test_stt():
 
 def test_tts():
     """Test 5: Text-to-speech."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 5: Text-to-Speech (Coqui TTS)")
-    print("="*60)
+    print("=" * 60)
 
     if not TTS_AVAILABLE:
         print("\n❌ TTS not installed")
@@ -227,15 +231,13 @@ def test_tts():
         print("   This may take a minute on first run (downloading model)...")
 
         tts = TextToSpeech(
-            model_name="tts_models/en/ljspeech/tacotron2-DDC",
-            use_cuda=False,
-            speed=1.0
+            model_name="tts_models/en/ljspeech/tacotron2-DDC", use_cuda=False, speed=1.0
         )
 
         test_texts = [
             "Hello. I am ZERO, your personal AI assistant.",
             "All systems are operational, sir.",
-            "How may I assist you today?"
+            "How may I assist you today?",
         ]
 
         for i, text in enumerate(test_texts, 1):
@@ -243,11 +245,12 @@ def test_tts():
             success = tts.speak(text)
 
             if not success:
-                print(f"   ❌ Failed to speak")
+                print("   ❌ Failed to speak")
             else:
-                print(f"   ✅ Complete")
+                print("   ✅ Complete")
 
             import time
+
             time.sleep(1)
 
         print("\n✅ Text-to-speech test complete")
@@ -263,7 +266,7 @@ def main():
     print("╚══════════════════════════════════════════════════════╝")
 
     # Setup logging
-    setup_logger('zero', 'WARNING')
+    setup_logger("zero", "WARNING")
 
     tests = [
         ("Audio Devices", test_audio_devices),
@@ -282,7 +285,7 @@ def main():
         choice = input("\nSelect test (0-5): ").strip()
 
         if choice == "0":
-            for name, test_func in tests:
+            for _, test_func in tests:
                 test_func()
         elif choice.isdigit() and 1 <= int(choice) <= len(tests):
             _, test_func = tests[int(choice) - 1]
@@ -293,10 +296,10 @@ def main():
     except KeyboardInterrupt:
         print("\n\nAborted by user")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Tests complete!")
-    print("="*60)
+    print("=" * 60)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

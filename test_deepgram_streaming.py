@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Test script for Deepgram Streaming STT with PyAudio.
+Test script for Deepgram Streaming STT with SoundDevice.
 
 This script demonstrates real-time transcription using:
-- PyAudio for microphone input
+- SoundDevice for microphone input
 - Deepgram WebSocket API for streaming transcription
 
 Requires:
 - DEEPGRAM_API_KEY environment variable
-- PyAudio installed
+- SoundDevice installed
 - Deepgram SDK installed
 """
 
@@ -17,19 +17,19 @@ import sys
 import asyncio
 import time
 from src.audio.stt import StreamingSpeechToText, DEEPGRAM_AVAILABLE
-from src.audio.audio_io import AudioRecorder, PYAUDIO_AVAILABLE
+from src.audio.audio_io import AudioRecorder, SOUNDDEVICE_AVAILABLE, PYAUDIO_AVAILABLE
 
 
 async def test_streaming_transcription():
     """Test streaming transcription with microphone input."""
     print("=" * 60)
-    print("Testing Deepgram Streaming STT with PyAudio")
+    print("Testing Deepgram Streaming STT with SoundDevice")
     print("=" * 60)
 
     # Check dependencies
-    if not PYAUDIO_AVAILABLE:
-        print("❌ PyAudio is not available!")
-        print("Install with: pip install pyaudio")
+    if not SOUNDDEVICE_AVAILABLE:
+        print("❌ SoundDevice is not available!")
+        print("Install with: uv pip install sounddevice")
         return False
 
     if not DEEPGRAM_AVAILABLE:
@@ -37,7 +37,7 @@ async def test_streaming_transcription():
         print("Install with: pip install deepgram-sdk")
         return False
 
-    print("✅ PyAudio is available")
+    print("✅ SoundDevice is available")
     print("✅ Deepgram SDK is available\n")
 
     # Get API key
@@ -59,7 +59,7 @@ async def test_streaming_transcription():
             language="en-US",
             sample_rate=16000,
             interim_results=True,
-            vad_events=True
+            vad_events=True,
         )
         print("✅ Streaming STT created\n")
 
@@ -81,7 +81,7 @@ async def test_streaming_transcription():
         recorder = AudioRecorder(
             sample_rate=16000,
             channels=1,
-            chunk_size=8000  # 0.5 seconds of audio per chunk
+            chunk_size=8000,  # 0.5 seconds of audio per chunk
         )
         recorder.start()
         print("✅ Audio recorder started\n")
@@ -145,6 +145,7 @@ async def test_streaming_transcription():
     except Exception as e:
         print(f"\n❌ Streaming test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -163,11 +164,7 @@ async def test_basic_streaming():
 
     try:
         print("Creating Streaming STT instance...")
-        stt = StreamingSpeechToText(
-            api_key=api_key,
-            model="nova-2",
-            language="en-US"
-        )
+        stt = StreamingSpeechToText(api_key=api_key, model="nova-2", language="en-US")
 
         print("✅ Instance created successfully")
         print(f"   Model: {stt.model}")
@@ -187,6 +184,7 @@ async def test_basic_streaming():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
