@@ -293,7 +293,7 @@ zero/
     - Pattern matching with regex
     - Keyword detection
     - spaCy rule-based matching
-  - **Cloud classification (OpenAI GPT/Ollama)**:
+  - **Cloud classification (OpenAI GPT)**:
     - Fallback for ambiguous queries
     - Context-aware understanding
     - Few-shot learning for custom intents
@@ -325,16 +325,12 @@ zero/
     - "Cancel it" (requires previous timer)
   - Context expiration (after 5 minutes of inactivity)
 
-#### **Backend - GPT/Ollama Integration**
+#### **Backend - GPT**
 - [ ] Create `src/brain/llm.py`:
   - OpenAI GPT-4 integration:
     - Function calling for structured outputs
     - System prompt for J.A.R.V.I.S. personality
     - Temperature control (0.3 for commands, 0.7 for conversation)
-  - Ollama integration (local LLM - optional):
-    - Llama 3 or Mistral models
-    - Same function calling interface
-    - Fallback when OpenAI unavailable
   - Token usage tracking
   - Cost monitoring (for OpenAI)
 
