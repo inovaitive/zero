@@ -1,5 +1,5 @@
 # ZERO Voice Assistant - Requirements
-# Python 3.9+
+# Python 3.10+ (required for Deepgram SDK 3.2.0)
 
 # ============================================
 # Audio - Wake Word Detection

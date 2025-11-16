@@ -98,6 +98,15 @@ For developers:
 
 ---
 
-**Tested on**: macOS with sounddevice 0.4.6
-**Related commits**: 9d7ab3f
+## Recent Updates
+
+**Python Version Fix (commit 9ec3b03)**
+- Upgraded Python requirement from 3.9 to 3.10+
+- Deepgram SDK 3.2.0 requires Python 3.10+ for `match` statement support
+- Fixes `SyntaxError: invalid syntax` on line 252 of deepgram/client.py
+
+---
+
+**Tested on**: macOS with sounddevice 0.4.6, Python 3.10+
+**Related commits**: 9d7ab3f, 9ec3b03
 **Branch**: `claude/zero-assistant-planning-01LgqqSKyNncLLBjUjrNJwu9` → `main`
