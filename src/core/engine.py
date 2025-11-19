@@ -180,7 +180,45 @@ class ZeroEngine:
         else:
             logger.warning("LLM client not available - conversational mode will be limited")
 
+        # Set up timer skill callback for TTS alerts
+        self._setup_timer_callback()
+
         logger.info("All components initialized successfully")
+
+    def _setup_timer_callback(self):
+        """Set up timer completion callback to use TTS."""
+        # Get the timer skill
+        timer_skill = self.skill_manager.get_skill("timer")
+        if not timer_skill:
+            logger.debug("Timer skill not found - skipping callback setup")
+            return
+
+        # Create callback function that uses TTS to speak the completion message
+        def timer_completion_callback(message: str):
+            """Callback function called when a timer completes."""
+            logger.info(f"Timer completion callback: {message}")
+
+            # Use TTS to speak the timer completion message
+            if self.tts_engine and self.audio_player:
+                try:
+                    logger.info(f"Speaking timer completion: {message}")
+                    audio_response = self.tts_engine.synthesize(message)
+
+                    if audio_response:
+                        self.audio_player.play(
+                            audio_response, sample_rate=self.tts_engine.sample_rate
+                        )
+                        logger.info("Timer completion message spoken")
+                    else:
+                        logger.warning("TTS synthesis failed for timer completion")
+                except Exception as e:
+                    logger.error(f"Error speaking timer completion: {e}")
+            else:
+                logger.debug("TTS or audio player not available - timer completion not spoken")
+
+        # Set the callback on the timer skill
+        timer_skill.set_alert_callback(timer_completion_callback)
+        logger.info("Timer completion callback configured")
 
     def _initialize_audio(self):
         """Initialize audio components (wake word, STT, TTS)."""
@@ -420,9 +458,12 @@ class ZeroEngine:
 
     def _handle_conversation_loop(self):
         """
-        Handle continuous conversation loop with pause detection and follow-up listening.
+        Handle continuous conversation loop - keeps listening until user says thank you.
+
+        Continuously listens for user input, responds after 1 second pause,
+        and continues until user says "thank you" or similar farewell.
         """
-        max_conversation_rounds = 10  # Prevent infinite loops
+        max_conversation_rounds = 50  # Prevent infinite loops (safety limit)
         round_count = 0
 
         while round_count < max_conversation_rounds:
@@ -433,17 +474,18 @@ class ZeroEngine:
             if self._on_listening_start:
                 self._on_listening_start()
 
-            # Record audio with pause detection
+            # Record audio with pause detection (1 second pause)
             if not self.audio_recorder:
                 logger.error("Audio recorder not initialized")
                 return
 
-            logger.info("Recording audio with pause detection...")
-            audio_data = self._record_with_pause_detection()
+            logger.info("Recording audio with pause detection (1 second pause)...")
+            audio_data = self._record_with_pause_detection(max_duration=30.0, pause_wait=1.0)
 
             if not audio_data or len(audio_data) < 500:  # Minimum audio length check
-                logger.info("No audio recorded - ending conversation")
-                break
+                logger.info("No audio recorded - continuing to listen...")
+                # Continue listening instead of breaking
+                continue
 
             if self._on_listening_stop:
                 self._on_listening_stop()
@@ -465,13 +507,26 @@ class ZeroEngine:
             )
 
             if not transcription or not transcription.strip():
-                logger.warning("No transcription received")
-                # Continue listening for follow-up
+                logger.warning("No transcription received - continuing to listen...")
+                # Continue listening
                 continue
 
             logger.info(f"Transcription: '{transcription}'")
             if self._on_processing:
                 self._on_processing(transcription)
+
+            # Check if user said thank you or goodbye (end conversation)
+            if self._is_farewell(transcription):
+                logger.info("User said farewell - ending conversation")
+                # Give a farewell response
+                farewell_response = self._get_farewell_response()
+                if farewell_response and self.tts_engine and self.audio_player:
+                    farewell_audio = self.tts_engine.synthesize(farewell_response)
+                    if farewell_audio:
+                        self.audio_player.play(
+                            farewell_audio, sample_rate=self.tts_engine.sample_rate
+                        )
+                break
 
             # Process through conversational LLM
             response_text = self._process_conversational(transcription)
@@ -503,30 +558,61 @@ class ZeroEngine:
                     response=response_text,
                 )
 
-                # After response, listen for follow-up for 5 seconds
-                logger.info("Listening for follow-up input (5 seconds)...")
-                follow_up_audio = self._listen_for_follow_up(duration=5.0)
-
-                if follow_up_audio and len(follow_up_audio) > 500:
-                    # User continued - process the follow-up
-                    logger.info("Follow-up detected, processing...")
-                    # Continue loop with follow-up audio
-                    audio_data = follow_up_audio
-                    continue
-                else:
-                    # No follow-up - end conversation
-                    logger.info("No follow-up detected, ending conversation")
-                    break
+                # After response, immediately continue listening (no delay)
+                logger.info("Response complete - continuing to listen...")
+                # Loop continues immediately to listen for next input
             else:
-                # No response - end conversation
-                break
+                # No response - continue listening anyway
+                logger.info("No response generated - continuing to listen...")
+                continue
 
         # Return to IDLE
         self.state_manager.transition_to(AssistantState.IDLE)
         logger.info("Conversation ended")
 
+    def _is_farewell(self, text: str) -> bool:
+        """
+        Check if user input is a farewell/thank you message.
+
+        Args:
+            text: User's input text
+
+        Returns:
+            True if it's a farewell message
+        """
+        text_lower = text.lower().strip()
+
+        # Farewell patterns
+        farewell_patterns = [
+            r"\b(thank\s+you|thanks|thx|ty)\b",
+            r"\b(goodbye|bye|see\s+you|farewell)\b",
+            r"\b(that\'?s\s+all|that\'?s\s+it|done|finished)\b",
+            r"\b(no\s+more|nothing\s+else|all\s+set)\b",
+        ]
+
+        import re
+
+        for pattern in farewell_patterns:
+            if re.search(pattern, text_lower):
+                return True
+
+        return False
+
+    def _get_farewell_response(self) -> str:
+        """Get a farewell response."""
+        import random
+
+        farewells = [
+            "You're welcome, sir. Have a good day.",
+            "You're most welcome, sir. Feel free to call on me anytime.",
+            "My pleasure, sir. I'm here whenever you need me.",
+            "You're welcome, sir. Take care.",
+        ]
+
+        return random.choice(farewells)
+
     def _record_with_pause_detection(
-        self, max_duration: float = 10.0, pause_wait: float = 0.8
+        self, max_duration: float = 10.0, pause_wait: float = 1.0
     ) -> bytes:
         """
         Record audio with pause detection - waits a bit after silence to see if user continues.
@@ -789,33 +875,84 @@ class ZeroEngine:
 
     def _process_conversational(self, user_input: str) -> str:
         """
-        Process user input through conversational LLM with full context.
+        Process user input through hybrid approach: Skills first, then LLM for conversation.
 
         Args:
             user_input: User's transcribed speech
 
         Returns:
-            LLM response text
+            Response text (from skill or LLM)
         """
-        # Check if LLM is available
+        # Step 1: Try to classify intent and extract entities
+        logger.debug(f"Classifying intent for: {user_input}")
+        intent_result = self.intent_classifier.classify(user_input)
+        intent = intent_result.intent.value
+        confidence = intent_result.confidence
+
+        logger.info(
+            f"Intent: {intent} (confidence: {confidence:.2f}, method: {intent_result.method})"
+        )
+
+        # Step 2: Extract entities
+        logger.debug("Extracting entities...")
+        entity_result = self.entity_extractor.extract(user_input, intent)
+        entities = {e.entity_type: e.value for e in entity_result.entities}
+        entities["user_input"] = user_input  # Include original input for context
+
+        logger.info(f"Entities: {entities}")
+
+        # Step 3: Get context
+        context = self.context_manager.get_context_for_query(user_input)
+        logger.debug(f"Context: {context}")
+
+        # Step 4: Check if a skill can handle this intent
+        skill = self.skill_manager._find_skill_for_intent(intent) if self.skill_manager else None
+
+        if skill and skill.is_enabled() and confidence > 0.5:
+            # Skill can handle this - execute it
+            logger.info(f"Executing skill '{skill.name}' for intent '{intent}'")
+            try:
+                skill_response = self.skill_manager.route_intent(
+                    intent=intent, entities=entities, context=context
+                )
+
+                if skill_response.success:
+                    logger.info(f"Skill executed successfully: {skill_response.message}")
+                    # Update context with skill execution
+                    self.context_manager.update(
+                        user_input=user_input,
+                        intent=intent,
+                        entities=entities,
+                        response=skill_response.message,
+                    )
+                    # Apply context updates from skill
+                    if skill_response.context_update:
+                        for key, value in skill_response.context_update.items():
+                            self.context_manager.set_preference(key, value)
+                    return skill_response.message
+                else:
+                    logger.warning(f"Skill execution failed: {skill_response.message}")
+                    # Fall through to LLM for error handling
+            except Exception as e:
+                logger.error(f"Error executing skill: {e}", exc_info=True)
+                # Fall through to LLM for error handling
+
+        # Step 5: Use LLM for general conversation or when skills can't handle it
         if not self.llm_client or not self.llm_client.is_available():
-            logger.warning("LLM not available - falling back to skill-based processing")
-            # Fallback to skill-based processing
-            result = self.process_text_command(user_input)
-            return (
-                result.response_text
-                if result.success
-                else "I apologize, but I'm having trouble processing that request."
-            )
+            logger.warning("LLM not available - using fallback response")
+            if skill:
+                return "I apologize, but I encountered an error processing that request."
+            else:
+                return (
+                    "I'm not sure how to handle that request. "
+                    "I can help with weather, timers, opening apps, and general questions."
+                )
 
         # Get conversation history in LLM format
         conversation_history = self._get_conversation_history_for_llm()
 
-        # Get context information
-        context = self.context_manager.get_context_for_query(user_input)
-
-        # Build enhanced system prompt with context
-        system_prompt = self._build_conversational_system_prompt(context)
+        # Build enhanced system prompt with context and skill information
+        system_prompt = self._build_conversational_system_prompt(context, intent, entities)
 
         # Get LLM response
         logger.info("Sending to LLM with conversation history...")
@@ -852,12 +989,19 @@ class ZeroEngine:
 
         return history
 
-    def _build_conversational_system_prompt(self, context: dict[str, Any]) -> str:
+    def _build_conversational_system_prompt(
+        self,
+        context: dict[str, Any],
+        intent: str = None,
+        entities: dict[str, Any] = None,
+    ) -> str:
         """
         Build enhanced system prompt with context and available capabilities.
 
         Args:
             context: Current conversation context
+            intent: Detected intent (if any)
+            entities: Extracted entities (if any)
 
         Returns:
             Enhanced system prompt string
@@ -881,15 +1025,21 @@ Communication style:
 - Acknowledge limitations honestly
 - Respond naturally to voice conversations"""
 
-        # Add available capabilities
+        # Add available capabilities with descriptions
         capabilities = []
         if self.skill_manager:
-            skill_names = [
-                skill.__class__.__name__.replace("Skill", "").lower()
-                for skill in self.skill_manager.skills.values()
-            ]
-            if skill_names:
-                capabilities.append(f"Available capabilities: {', '.join(skill_names)}")
+            skill_descriptions = []
+            for skill in self.skill_manager.skills.values():
+                if skill.is_enabled():
+                    skill_name = skill.__class__.__name__.replace("Skill", "").lower()
+                    skill_desc = skill.description or skill_name
+                    skill_descriptions.append(f"- {skill_name}: {skill_desc}")
+
+            if skill_descriptions:
+                capabilities.append("Available capabilities:\n" + "\n".join(skill_descriptions))
+                capabilities.append(
+                    "\nWhen users ask about these capabilities, acknowledge that I can help with them."
+                )
 
         # Add context information
         context_info = []
@@ -902,13 +1052,25 @@ Communication style:
             if "preferred_location" in prefs:
                 context_info.append(f"User's preferred location: {prefs['preferred_location']}")
 
+        # Add detected intent and entities if available
+        if intent and intent != "unknown":
+            context_info.append(f"Detected intent: {intent}")
+        if entities:
+            relevant_entities = {k: v for k, v in entities.items() if k != "user_input"}
+            if relevant_entities:
+                context_info.append(f"Extracted entities: {relevant_entities}")
+
         # Combine into final prompt
         if capabilities:
             base_prompt += f"\n\n{capabilities[0]}"
         if context_info:
             base_prompt += f"\n\nContext: {'; '.join(context_info)}"
 
-        base_prompt += "\n\nRespond naturally and conversationally to the user's voice input."
+        base_prompt += (
+            "\n\nRespond naturally and conversationally to the user's voice input. "
+            "If the user asks about capabilities I have (weather, timers, apps, search), "
+            "acknowledge that I can help with those tasks."
+        )
 
         return base_prompt
 

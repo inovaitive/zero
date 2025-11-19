@@ -138,6 +138,10 @@ class EntityExtractor:
         entities.extend(self._extract_app_names(text))
         entities.extend(self._extract_numbers(text))
         entities.extend(self._extract_weather_specific(text))
+        
+        # Extract search queries if intent is search
+        if intent_type == "search.web":
+            entities.extend(self._extract_search_query(text))
 
         # Remove duplicates (keep highest confidence)
         entities = self._deduplicate_entities(entities)
@@ -402,6 +406,42 @@ class EntityExtractor:
                     confidence=0.85,
                     metadata={'condition_type': condition}
                 ))
+
+        return entities
+
+    def _extract_search_query(self, text: str) -> List[Entity]:
+        """Extract search query from text."""
+        entities = []
+
+        # Patterns to identify search queries
+        # Remove common search phrases and extract the query
+        query = text
+
+        # Remove search trigger words
+        patterns_to_remove = [
+            r"^search\s+(for\s+)?",
+            r"^google\s+",
+            r"^look\s+up\s+",
+            r"^find\s+(me\s+)?(information\s+)?(about\s+)?",
+            r"^search\s+",
+        ]
+
+        for pattern in patterns_to_remove:
+            query = re.sub(pattern, "", query, flags=re.IGNORECASE)
+
+        query = query.strip()
+
+        # If we have a meaningful query (more than just trigger words)
+        if query and len(query) > 2:
+            entities.append(
+                Entity(
+                    entity_type="search_query",
+                    value=query,
+                    text=query,
+                    confidence=0.9,
+                    metadata={"method": "regex_extraction"},
+                )
+            )
 
         return entities
 

@@ -96,8 +96,20 @@ class SkillManager:
                     for name, obj in inspect.getmembers(module, inspect.isclass):
                         # Check if it's a skill class (inherits from BaseSkill but not BaseSkill itself)
                         if issubclass(obj, BaseSkill) and obj is not BaseSkill:
-                            # Instantiate the skill
-                            skill = obj()
+                            # Instantiate the skill with config if it accepts it
+                            try:
+                                # Try to instantiate with config parameter
+                                import inspect as inspect_module
+                                sig = inspect_module.signature(obj.__init__)
+                                if 'config' in sig.parameters:
+                                    skill = obj(config=self.config)
+                                else:
+                                    skill = obj()
+                            except Exception as e:
+                                # Fallback to no-arg instantiation
+                                logger.warning(f"Could not instantiate {name} with config, trying without: {e}")
+                                skill = obj()
+                            
                             self.register_skill(skill)
                             discovered_count += 1
                             logger.info(f"Discovered skill: {modname} ({skill.name})")
