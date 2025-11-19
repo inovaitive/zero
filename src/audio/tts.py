@@ -18,7 +18,10 @@ except ImportError:
     TTS_AVAILABLE = False
 
 from src.core.logger import get_logger
+from src.core.profiler import profile_method, get_profiler
 from src.audio.audio_io import AudioPlayer
+import io
+import wave
 
 
 logger = get_logger(__name__)
@@ -85,46 +88,69 @@ class TextToSpeech:
         # Audio player for playback
         self.player = AudioPlayer(sample_rate=22050)
 
+    @profile_method("tts.synthesize")
     def synthesize(self, text: str) -> Optional[bytes]:
         """
-        Synthesize speech from text.
+        Synthesize speech from text using in-memory processing.
 
         Args:
             text: Text to convert to speech
 
         Returns:
-            Audio data as bytes, or None if synthesis failed
+            Audio data as bytes (PCM), or None if synthesis failed
         """
         if not text or not text.strip():
             logger.warning("Empty text provided for TTS")
             return None
 
+        profiler = get_profiler()
+
         try:
             logger.info(f"Synthesizing: '{text}'")
 
-            # Create temporary file for output
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                temp_path = temp_file.name
+            with profiler.measure("tts.synthesis"):
+                # Synthesize to numpy array (in-memory, faster)
+                try:
+                    # Try to synthesize to numpy array directly (TTS 0.22.0+)
+                    wav_audio = self.tts.tts(text=text, speed=self.speed)
 
-            # Synthesize to WAV file
-            self.tts.tts_to_file(
-                text=text,
-                file_path=temp_path,
-                speed=self.speed
-            )
+                    # Convert to bytes
+                    if wav_audio is not None:
+                        # wav_audio is a numpy array, convert to PCM bytes
+                        import numpy as np
+                        # Normalize to 16-bit PCM range
+                        audio_int16 = (wav_audio * 32767).astype(np.int16)
+                        audio_data = audio_int16.tobytes()
 
-            # Read audio data
-            with open(temp_path, "rb") as f:
-                # Skip WAV header (44 bytes)
-                f.seek(44)
-                audio_data = f.read()
+                        logger.info(f"Synthesized {len(audio_data)} bytes of audio (in-memory)")
+                        return audio_data
+                    else:
+                        raise ValueError("TTS returned None")
 
-            # Clean up temp file
-            os.unlink(temp_path)
+                except (AttributeError, TypeError):
+                    # Fallback to file-based synthesis for older TTS versions
+                    logger.debug("Using file-based synthesis (fallback)")
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+                        temp_path = temp_file.name
 
-            logger.info(f"Synthesized {len(audio_data)} bytes of audio")
+                    # Synthesize to WAV file
+                    self.tts.tts_to_file(
+                        text=text,
+                        file_path=temp_path,
+                        speed=self.speed
+                    )
 
-            return audio_data
+                    # Read audio data
+                    with open(temp_path, "rb") as f:
+                        # Skip WAV header (44 bytes)
+                        f.seek(44)
+                        audio_data = f.read()
+
+                    # Clean up temp file
+                    os.unlink(temp_path)
+
+                    logger.info(f"Synthesized {len(audio_data)} bytes of audio (file-based)")
+                    return audio_data
 
         except Exception as e:
             logger.error(f"TTS synthesis error: {e}")
@@ -216,14 +242,38 @@ class CachedTTS(TextToSpeech):
     Text-to-Speech with response caching.
 
     Caches synthesized audio to avoid re-generating common phrases.
+    Supports pre-warming cache with common phrases for instant responses.
     """
+
+    # Common phrases to pre-cache for J.A.R.V.I.S. personality
+    COMMON_PHRASES = [
+        "Certainly, sir.",
+        "Certainly.",
+        "Right away, sir.",
+        "Of course.",
+        "One moment, sir.",
+        "I'm on it.",
+        "Processing.",
+        "Understood.",
+        "My apologies, sir.",
+        "I'm afraid I don't have that information.",
+        "How may I assist you?",
+        "Good morning, sir.",
+        "Good afternoon, sir.",
+        "Good evening, sir.",
+        "At your service.",
+        "I'm ready when you are.",
+        "Will there be anything else?",
+        "Very well, sir.",
+    ]
 
     def __init__(
         self,
         model_name: str = "tts_models/en/ljspeech/tacotron2-DDC",
         use_cuda: bool = False,
         speed: float = 1.0,
-        cache_dir: Optional[str] = None
+        cache_dir: Optional[str] = None,
+        pre_cache_common: bool = True
     ):
         """
         Initialize cached TTS.
@@ -233,6 +283,7 @@ class CachedTTS(TextToSpeech):
             use_cuda: Use GPU acceleration
             speed: Speech speed multiplier
             cache_dir: Directory for cache files (None = use data/cache/tts)
+            pre_cache_common: Pre-cache common phrases on init
         """
         super().__init__(model_name, use_cuda, speed)
 
@@ -244,9 +295,16 @@ class CachedTTS(TextToSpeech):
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir = cache_dir
+        self.cache_hits = 0
+        self.cache_misses = 0
 
         logger.info(f"TTS cache directory: {cache_dir}")
 
+        # Pre-cache common phrases for instant responses
+        if pre_cache_common:
+            self.warm_cache()
+
+    @profile_method("tts.synthesize_cached")
     def synthesize(self, text: str) -> Optional[bytes]:
         """
         Synthesize speech with caching.
@@ -267,11 +325,13 @@ class CachedTTS(TextToSpeech):
 
         # Check cache
         if cache_file.exists():
-            logger.debug(f"TTS cache hit for: '{text}'")
+            self.cache_hits += 1
+            logger.debug(f"TTS cache hit ({self.cache_hits}/{self.cache_hits + self.cache_misses}): '{text}'")
             with open(cache_file, "rb") as f:
                 return f.read()
 
-        # Synthesize
+        # Cache miss - synthesize
+        self.cache_misses += 1
         audio_data = super().synthesize(text)
 
         # Save to cache
@@ -281,6 +341,45 @@ class CachedTTS(TextToSpeech):
             logger.debug(f"TTS cached: '{text}'")
 
         return audio_data
+
+    def warm_cache(self, phrases: Optional[list] = None):
+        """
+        Pre-cache common phrases for instant responses.
+
+        Args:
+            phrases: List of phrases to cache (None = use COMMON_PHRASES)
+        """
+        if phrases is None:
+            phrases = self.COMMON_PHRASES
+
+        logger.info(f"Warming TTS cache with {len(phrases)} common phrases...")
+
+        cached_count = 0
+        for phrase in phrases:
+            # Check if already cached
+            import hashlib
+            cache_key = hashlib.md5(phrase.encode()).hexdigest()
+            cache_file = self.cache_dir / f"{cache_key}.raw"
+
+            if not cache_file.exists():
+                # Synthesize and cache
+                audio_data = super().synthesize(phrase)
+                if audio_data:
+                    with open(cache_file, "wb") as f:
+                        f.write(audio_data)
+                    cached_count += 1
+
+        logger.info(f"TTS cache warmed: {cached_count} new phrases cached")
+
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Get cache statistics."""
+        total_files = len(list(self.cache_dir.glob("*.raw")))
+        return {
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'total_cached_phrases': total_files,
+            'hit_rate': self.cache_hits / (self.cache_hits + self.cache_misses) if (self.cache_hits + self.cache_misses) > 0 else 0.0
+        }
 
 
 def create_tts(

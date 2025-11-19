@@ -38,15 +38,16 @@ stt:
 # ============================================
 tts:
   provider: "coqui"
-  model: "tts_models/en/ljspeech/tacotron2-DDC"  # Female voice
+  model: "tts_models/en/ljspeech/vits"  # VITS is faster than Tacotron2 (OPTIMIZED)
   # Alternative models:
-  # - tts_models/en/ljspeech/vits (faster)
+  # - tts_models/en/ljspeech/tacotron2-DDC (slower but higher quality)
   # - tts_models/en/vctk/vits (multiple speakers)
   vocoder: "vocoder_models/en/ljspeech/hifigan_v2"
-  speed: 1.0  # 0.5 (slower) to 2.0 (faster)
+  speed: 1.1  # Slightly faster speech for responsiveness
   use_cuda: false  # Set to true if GPU available
   cache_enabled: true
   cache_dir: "data/cache/tts"
+  pre_cache_common: true  # Pre-cache common phrases on startup (OPTIMIZED)
 
 # ============================================
 # Natural Language Understanding
@@ -55,17 +56,19 @@ nlu:
   # Local classification (spaCy)
   local:
     enabled: true
-    confidence_threshold: 0.8  # Use cloud if below this
+    confidence_threshold: 0.7  # Lowered from 0.8 for fewer cloud calls (OPTIMIZED)
     spacy_model: "en_core_web_sm"
 
-  # Cloud classification (OpenAI)
+  # Cloud classification (OpenAI) - Async with timeout
   cloud:
-    enabled: true
+    enabled: true  # Enable for better accuracy, but uses async mode (OPTIMIZED)
     provider: "openai"
     api_key: "${OPENAI_API_KEY}"  # Set in .env file
-    model: "gpt-4"  # gpt-4, gpt-3.5-turbo
+    model: "gpt-3.5-turbo"  # Faster than gpt-4 (OPTIMIZED)
     temperature: 0.3  # 0.0 (deterministic) to 1.0 (creative)
-    max_tokens: 500
+    max_tokens: 200  # Reduced from 500 for faster responses (OPTIMIZED)
+    timeout: 2.0  # Max wait time for cloud result (OPTIMIZED)
+    async_mode: true  # Run cloud in parallel with local (OPTIMIZED)
 
 # ============================================
 # Context Management
@@ -153,6 +156,15 @@ audio:
     sample_rate: 22050
 
 # ============================================
+# Response Caching (OPTIMIZED)
+# ============================================
+response_cache:
+  enabled: true
+  ttl: 3600  # Cache responses for 1 hour
+  max_entries: 1000
+  cache_dir: "data/cache/responses"
+
+# ============================================
 # Performance Settings
 # ============================================
 performance:
@@ -160,6 +172,7 @@ performance:
   lazy_load_models: true
   use_threading: true
   max_workers: 4
+  profiling_enabled: true  # Enable performance profiling (OPTIMIZED)
 
 # ============================================
 # Development Settings

@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 from src.core.state import AssistantState, StateManager, get_state_manager
 from src.core.config import Config
+from src.core.profiler import get_profiler, PipelineTimer, profile_method
+from src.core.response_cache import get_response_cache
 from src.skills.skill_manager import SkillManager
 from src.skills.base_skill import SkillResponse
 from src.brain.intent import IntentClassifier
@@ -142,9 +144,21 @@ class ZeroEngine:
 
         # Initialize NLU components (if not provided)
         if not self.intent_classifier:
-            from src.brain.intent import create_intent_classifier
-            self.intent_classifier = create_intent_classifier(self.config.get_all())
-            logger.info("Intent classifier initialized")
+            # Check if async mode is enabled
+            nlu_config = self.config.get_all().get('nlu', {})
+            cloud_config = nlu_config.get('cloud', {})
+            use_async = cloud_config.get('async_mode', True)
+
+            if use_async:
+                # Use async intent classifier for parallel processing
+                from src.brain.async_intent import create_async_intent_classifier
+                self.intent_classifier = create_async_intent_classifier(self.config.get_all())
+                logger.info("Async intent classifier initialized (optimized)")
+            else:
+                # Use standard sync classifier
+                from src.brain.intent import create_intent_classifier
+                self.intent_classifier = create_intent_classifier(self.config.get_all())
+                logger.info("Intent classifier initialized")
 
         if not self.entity_extractor:
             from src.brain.entities import create_entity_extractor
@@ -160,6 +174,10 @@ class ZeroEngine:
         if not self.skill_manager:
             self.skill_manager = SkillManager(config=self.config.get_all(), auto_discover=True)
             logger.info(f"Skill manager initialized with {len(self.skill_manager.skills)} skills")
+
+        # Initialize response cache
+        self.response_cache = get_response_cache(self.config.get_all())
+        logger.info("Response cache initialized")
 
         logger.info("All components initialized successfully")
 
@@ -265,11 +283,13 @@ class ZeroEngine:
         finally:
             logger.info("Event loop stopped")
 
+    @profile_method("engine.process_text_command")
     def process_text_command(self, user_input: str) -> PipelineResult:
         """
         Process a text command through the full pipeline (for CLI mode).
 
         This bypasses audio components and processes text directly.
+        Includes profiling, caching, and optimized async processing.
 
         Args:
             user_input: User's text input
@@ -277,6 +297,9 @@ class ZeroEngine:
         Returns:
             PipelineResult with processing results
         """
+        profiler = get_profiler()
+        timer = PipelineTimer(request_id=f"req_{int(time.time()*1000)}")
+
         start_time = time.time()
 
         try:
@@ -287,39 +310,99 @@ class ZeroEngine:
             if self._on_processing:
                 self._on_processing(user_input)
 
+            # Step 0: Check response cache
+            timer.start("cache_lookup")
+            cached_response = self.response_cache.get(user_input)
+            timer.end("cache_lookup")
+
+            if cached_response:
+                logger.info(f"🎯 Using cached response for: '{user_input}'")
+
+                # Call response callback
+                if self._on_response:
+                    self._on_response(cached_response.response_text)
+
+                # Return cached result
+                latency_ms = (time.time() - start_time) * 1000
+                self.state_manager.transition_to(AssistantState.IDLE)
+
+                return PipelineResult(
+                    success=True,
+                    user_input=user_input,
+                    intent=cached_response.intent,
+                    entities={},
+                    context={},
+                    skill_response=SkillResponse(
+                        success=True,
+                        message=cached_response.response_text,
+                        data={'cached': True}
+                    ),
+                    response_text=cached_response.response_text,
+                    latency_ms=latency_ms
+                )
+
             # Step 1: Classify intent
+            timer.start("intent_classification")
             logger.debug(f"Classifying intent for: {user_input}")
-            intent_result = self.intent_classifier.classify(user_input)
+
+            # Check if async classifier
+            import asyncio
+            if hasattr(self.intent_classifier, 'classify_async'):
+                try:
+                    # Use async classification
+                    loop = asyncio.get_event_loop()
+                    intent_result = loop.run_until_complete(
+                        self.intent_classifier.classify_async(user_input)
+                    )
+                except RuntimeError:
+                    # No event loop, create one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    intent_result = loop.run_until_complete(
+                        self.intent_classifier.classify_async(user_input)
+                    )
+            else:
+                # Use sync classification
+                intent_result = self.intent_classifier.classify(user_input)
+
             intent = intent_result.intent.value
             confidence = intent_result.confidence
+            timer.end("intent_classification")
 
             logger.info(f"Intent: {intent} (confidence: {confidence:.2f}, method: {intent_result.method})")
 
             # Step 2: Extract entities
+            timer.start("entity_extraction")
             logger.debug("Extracting entities...")
             entity_result = self.entity_extractor.extract(user_input, intent)
             entities = {e.entity_type: e.value for e in entity_result.entities}
+            timer.end("entity_extraction")
 
             logger.info(f"Entities: {entities}")
 
             # Step 3: Get context
+            timer.start("context_retrieval")
             context = self.context_manager.get_context_for_query(user_input)
+            timer.end("context_retrieval")
             logger.debug(f"Context: {context}")
 
             # State: EXECUTING
             self.state_manager.transition_to(AssistantState.EXECUTING)
 
             # Step 4: Execute skill
+            timer.start("skill_execution")
             logger.debug(f"Routing to skill manager...")
             skill_response = self.skill_manager.route_intent(
                 intent=intent,
                 entities=entities,
                 context=context
             )
+            timer.end("skill_execution")
 
             logger.info(f"Skill executed: {skill_response.message}")
 
             # Step 5: Update context
+            timer.start("context_update")
             self.context_manager.update(
                 user_input=user_input,
                 intent=intent,
@@ -330,8 +413,17 @@ class ZeroEngine:
             # Apply any context updates from skill
             if skill_response.context_update:
                 for key, value in skill_response.context_update.items():
-                    # Use set_preference for context updates (preferences or other context data)
                     self.context_manager.set_preference(key, value)
+            timer.end("context_update")
+
+            # Step 6: Cache response
+            timer.start("cache_store")
+            self.response_cache.set(
+                user_input=user_input,
+                intent=intent,
+                response_text=skill_response.message
+            )
+            timer.end("cache_store")
 
             # State: RESPONDING
             self.state_manager.transition_to(AssistantState.RESPONDING)
@@ -342,6 +434,9 @@ class ZeroEngine:
 
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
+
+            # Log pipeline breakdown
+            logger.debug(f"Pipeline breakdown:\n{timer.get_report()}")
 
             # Return to IDLE
             self.state_manager.transition_to(AssistantState.IDLE)
