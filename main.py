@@ -9,14 +9,15 @@ import argparse
 import signal
 import sys
 from pathlib import Path
+from typing import Optional
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.core.config import ConfigError, get_config
+from src.core.engine import ZeroEngine, create_engine
 from src.core.logger import setup_logger
 from src.core.state import AssistantState, get_state_manager
-from src.core.engine import create_engine, ZeroEngine
 from src.ui.cli import create_cli
 from src.ui.tray import TRAY_AVAILABLE, create_tray
 
@@ -155,10 +156,7 @@ class ZeroAssistant:
         self.logger.info("Initializing ZERO engine...")
 
         # Create engine
-        self.engine = create_engine(
-            config=self.config,
-            state_manager=self.state_manager
-        )
+        self.engine = create_engine(config=self.config, state_manager=self.state_manager)
 
         # Initialize all components (NLU, skills, audio)
         self.engine.initialize_components()
@@ -170,7 +168,7 @@ class ZeroAssistant:
             on_listening_stop=self._on_listening_stop,
             on_processing=self._on_processing,
             on_response=self._on_response,
-            on_error=self._on_error
+            on_error=self._on_error,
         )
 
         self.logger.info("ZERO engine ready")
@@ -247,10 +245,12 @@ class ZeroAssistant:
                 if self.cli and self.debug_nlu:
                     self.cli.update_nlu_debug(
                         intent=result.intent,
-                        confidence=result.skill_response.data.get('confidence', 0.0) if result.skill_response else 0.0,
+                        confidence=result.skill_response.data.get("confidence", 0.0)
+                        if result.skill_response
+                        else 0.0,
                         entities=result.entities or {},
                         context=result.context or {},
-                        method="engine"
+                        method="engine",
                     )
 
                 # Display response
@@ -275,32 +275,62 @@ class ZeroAssistant:
         print(f"State: {status['state']}")
         print(f"Skills Loaded: {status['skills_loaded']}")
         print("\nComponents:")
-        for component, loaded in status['components'].items():
+        for component, loaded in status["components"].items():
             status_icon = "✓" if loaded else "✗"
             print(f"  {status_icon} {component}")
         print("==================\n")
 
     def _run_voice_mode(self):
-        """Run in voice mode (wake word + STT)."""
+        """Run in voice mode (wake word + STT + TTS)."""
         self.logger.info("Running in voice mode")
+
+        # Check if audio components are available
+        if not self.engine.wake_word_detector:
+            self.logger.error("Wake word detector not initialized - cannot run voice mode")
+            if self.cli:
+                self.cli.print_error("Voice mode requires wake word detector")
+                self.cli.print_info("Please check your configuration:")
+                self.cli.print_info("  - PICOVOICE_ACCESS_KEY in .env file")
+                self.cli.print_info("  - wake_word.enabled in config.yaml")
+            return
+
+        if not self.engine.stt_engine:
+            self.logger.error("STT engine not initialized - cannot run voice mode")
+            if self.cli:
+                self.cli.print_error("Voice mode requires STT engine")
+                self.cli.print_info("Please check your configuration:")
+                self.cli.print_info("  - DEEPGRAM_API_KEY in .env file")
+            return
+
+        if not self.engine.tts_engine:
+            self.logger.warning("TTS engine not initialized - responses will not be spoken")
+        else:
+            self.logger.info("TTS engine ready - responses will be spoken")
 
         if self.cli:
             self.cli.add_log("INFO", "Voice mode initialized")
-            self.cli.print_info("Voice mode not fully implemented yet")
-            self.cli.print_info("Audio components (wake word, STT, TTS) pending")
-            self.cli.print_info("Use --cli-only mode for testing")
+            self.cli.print_info("Voice mode active - waiting for wake word...")
+            self.cli.print_info(
+                f"Say '{self.config.get('wake_word.keyword', 'jarvis')}' to activate"
+            )
+            self.cli.print_info("Press Ctrl+C to exit")
 
         try:
-            # Start engine event loop
+            # Start engine event loop (this starts wake word detection)
             self.engine.start()
 
             # Keep main thread alive
             import time
+
             while self.engine.is_running():
                 time.sleep(0.5)
 
         except KeyboardInterrupt:
-            pass
+            self.logger.info("Interrupted by user")
+        except Exception as e:
+            self.logger.error(f"Error in voice mode: {e}", exc_info=True)
+            if self.cli:
+                self.cli.print_error(f"Error: {e}")
 
     def _print_help(self):
         """Print help message."""
@@ -369,7 +399,7 @@ def parse_args():
     parser.add_argument(
         "--debug-nlu",
         action="store_true",
-        help="Enable NLU debug mode (show intent, entities, context)"
+        help="Enable NLU debug mode (show intent, entities, context)",
     )
 
     parser.add_argument("--version", action="version", version="ZERO Assistant v1.0.0")
@@ -384,9 +414,7 @@ def main():
 
     # Create and run assistant
     assistant = ZeroAssistant(
-        config_path=args.config,
-        cli_only=args.cli_only,
-        debug_nlu=args.debug_nlu
+        config_path=args.config, cli_only=args.cli_only, debug_nlu=args.debug_nlu
     )
 
     assistant.run()

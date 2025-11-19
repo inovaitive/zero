@@ -243,3 +243,4 @@ class TestGetLogger:
         logger = get_logger('test_with_handlers')
         assert len(logger.handlers) == initial_count
 
+
