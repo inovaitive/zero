@@ -10,6 +10,7 @@ from typing import Optional
 from pathlib import Path
 import numpy as np
 import tempfile
+import time
 
 try:
     from TTS.api import TTS
@@ -101,6 +102,7 @@ class TextToSpeech:
 
         try:
             logger.info(f"Synthesizing: '{text}'")
+            start_time = time.time()
 
             # Create temporary file for output
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
@@ -122,7 +124,8 @@ class TextToSpeech:
             # Clean up temp file
             os.unlink(temp_path)
 
-            logger.info(f"Synthesized {len(audio_data)} bytes of audio")
+            tts_latency_ms = (time.time() - start_time) * 1000
+            logger.info(f"✓ TTS latency: {tts_latency_ms:.0f}ms | Synthesized {len(audio_data)} bytes | Text length: {len(text)} chars")
 
             return audio_data
 
@@ -260,6 +263,8 @@ class CachedTTS(TextToSpeech):
         if not text or not text.strip():
             return None
 
+        start_time = time.time()
+
         # Generate cache key (hash of text)
         import hashlib
         cache_key = hashlib.md5(text.encode()).hexdigest()
@@ -267,11 +272,14 @@ class CachedTTS(TextToSpeech):
 
         # Check cache
         if cache_file.exists():
-            logger.debug(f"TTS cache hit for: '{text}'")
             with open(cache_file, "rb") as f:
-                return f.read()
+                audio_data = f.read()
+            cache_latency_ms = (time.time() - start_time) * 1000
+            logger.info(f"✓ TTS cache HIT: {cache_latency_ms:.0f}ms | '{text}'")
+            return audio_data
 
-        # Synthesize
+        # Synthesize (timing is handled in parent class)
+        logger.info(f"TTS cache MISS, synthesizing: '{text}'")
         audio_data = super().synthesize(text)
 
         # Save to cache

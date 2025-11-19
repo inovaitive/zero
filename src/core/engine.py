@@ -468,6 +468,8 @@ class ZeroEngine:
 
         while round_count < max_conversation_rounds:
             round_count += 1
+            round_start_time = time.time()
+            stage_timings = {}
 
             # State: LISTENING
             self.state_manager.transition_to(AssistantState.LISTENING)
@@ -480,7 +482,9 @@ class ZeroEngine:
                 return
 
             logger.info("Recording audio with pause detection (1 second pause)...")
+            recording_start = time.time()
             audio_data = self._record_with_pause_detection(max_duration=30.0, pause_wait=1.0)
+            stage_timings['recording'] = (time.time() - recording_start) * 1000
 
             if not audio_data or len(audio_data) < 500:  # Minimum audio length check
                 logger.info("No audio recorded - continuing to listen...")
@@ -499,12 +503,14 @@ class ZeroEngine:
                 return
 
             logger.info("Transcribing audio...")
+            stt_start = time.time()
             transcription = self.stt_engine.transcribe_bytes(
                 audio_data=audio_data,
                 sample_rate=self.audio_recorder.sample_rate,
                 channels=self.audio_recorder.channels,
                 encoding="linear16",
             )
+            stage_timings['stt'] = (time.time() - stt_start) * 1000
 
             if not transcription or not transcription.strip():
                 logger.warning("No transcription received - continuing to listen...")
@@ -529,7 +535,9 @@ class ZeroEngine:
                 break
 
             # Process through conversational LLM
+            processing_start = time.time()
             response_text = self._process_conversational(transcription)
+            stage_timings['processing'] = (time.time() - processing_start) * 1000
 
             # State: RESPONDING (TTS)
             if response_text:
@@ -538,17 +546,32 @@ class ZeroEngine:
                 # Synthesize and play response
                 if self.tts_engine and self.audio_player:
                     logger.info("Synthesizing response...")
+                    tts_start = time.time()
                     audio_response = self.tts_engine.synthesize(response_text)
+                    stage_timings['tts'] = (time.time() - tts_start) * 1000
 
                     if audio_response:
                         logger.info("Playing response...")
+                        playback_start = time.time()
                         self.audio_player.play(
                             audio_response, sample_rate=self.tts_engine.sample_rate
                         )
+                        stage_timings['playback'] = (time.time() - playback_start) * 1000
                     else:
                         logger.warning("TTS synthesis failed")
                 else:
                     logger.warning("TTS or audio player not available - response not spoken")
+
+                # Log round timing breakdown
+                total_round_time = (time.time() - round_start_time) * 1000
+                logger.info(
+                    f"✓ CONVERSATION ROUND {round_count} COMPLETE: {total_round_time:.0f}ms total | "
+                    f"Recording: {stage_timings.get('recording', 0):.0f}ms, "
+                    f"STT: {stage_timings.get('stt', 0):.0f}ms, "
+                    f"Processing: {stage_timings.get('processing', 0):.0f}ms, "
+                    f"TTS: {stage_timings.get('tts', 0):.0f}ms, "
+                    f"Playback: {stage_timings.get('playback', 0):.0f}ms"
+                )
 
                 # Update context with this interaction
                 self.context_manager.update(
@@ -775,6 +798,7 @@ class ZeroEngine:
             PipelineResult with processing results
         """
         start_time = time.time()
+        stage_timings = {}
 
         try:
             # State: PROCESSING
@@ -786,7 +810,9 @@ class ZeroEngine:
 
             # Step 1: Classify intent
             logger.debug(f"Classifying intent for: {user_input}")
+            step_start = time.time()
             intent_result = self.intent_classifier.classify(user_input)
+            stage_timings['intent_classification'] = (time.time() - step_start) * 1000
             intent = intent_result.intent.value
             confidence = intent_result.confidence
 
@@ -796,13 +822,17 @@ class ZeroEngine:
 
             # Step 2: Extract entities
             logger.debug("Extracting entities...")
+            step_start = time.time()
             entity_result = self.entity_extractor.extract(user_input, intent)
+            stage_timings['entity_extraction'] = (time.time() - step_start) * 1000
             entities = {e.entity_type: e.value for e in entity_result.entities}
 
             logger.info(f"Entities: {entities}")
 
             # Step 3: Get context
+            step_start = time.time()
             context = self.context_manager.get_context_for_query(user_input)
+            stage_timings['context_retrieval'] = (time.time() - step_start) * 1000
             logger.debug(f"Context: {context}")
 
             # State: EXECUTING
@@ -810,13 +840,16 @@ class ZeroEngine:
 
             # Step 4: Execute skill
             logger.debug("Routing to skill manager...")
+            step_start = time.time()
             skill_response = self.skill_manager.route_intent(
                 intent=intent, entities=entities, context=context
             )
+            stage_timings['skill_execution'] = (time.time() - step_start) * 1000
 
             logger.info(f"Skill executed: {skill_response.message}")
 
             # Step 5: Update context
+            step_start = time.time()
             self.context_manager.update(
                 user_input=user_input,
                 intent=intent,
@@ -829,6 +862,7 @@ class ZeroEngine:
                 for key, value in skill_response.context_update.items():
                     # Use set_preference for context updates (preferences or other context data)
                     self.context_manager.set_preference(key, value)
+            stage_timings['context_update'] = (time.time() - step_start) * 1000
 
             # State: RESPONDING
             self.state_manager.transition_to(AssistantState.RESPONDING)
@@ -839,6 +873,16 @@ class ZeroEngine:
 
             # Calculate latency
             latency_ms = (time.time() - start_time) * 1000
+
+            # Log detailed timing breakdown
+            logger.info(
+                f"✓ PIPELINE COMPLETE: {latency_ms:.0f}ms total | "
+                f"Intent: {stage_timings.get('intent_classification', 0):.0f}ms, "
+                f"Entities: {stage_timings.get('entity_extraction', 0):.0f}ms, "
+                f"Context: {stage_timings.get('context_retrieval', 0):.0f}ms, "
+                f"Skill: {stage_timings.get('skill_execution', 0):.0f}ms, "
+                f"Update: {stage_timings.get('context_update', 0):.0f}ms"
+            )
 
             # Return to IDLE
             self.state_manager.transition_to(AssistantState.IDLE)

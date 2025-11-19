@@ -10,6 +10,7 @@ import asyncio
 import threading
 from pathlib import Path
 import queue
+import time
 
 try:
     from deepgram import (
@@ -122,19 +123,21 @@ class SpeechToText:
 
             # Transcribe
             logger.debug(f"Transcribing {len(audio_data)} bytes...")
+            start_time = time.time()
             response = self.client.listen.prerecorded.v("1").transcribe_file(
                 payload,
                 options,
                 timeout=self.timeout
             )
+            stt_latency_ms = (time.time() - start_time) * 1000
 
             # Extract transcript
             transcript = self._extract_transcript(response)
 
             if transcript:
-                logger.info(f"Transcription: '{transcript}'")
+                logger.info(f"✓ STT latency: {stt_latency_ms:.0f}ms | Transcription: '{transcript}'")
             else:
-                logger.warning("No transcription returned")
+                logger.warning(f"✗ STT latency: {stt_latency_ms:.0f}ms | No transcription returned")
 
             return transcript
 
@@ -173,19 +176,21 @@ class SpeechToText:
 
             # Transcribe
             logger.debug(f"Transcribing file: {filename}")
+            start_time = time.time()
             response = self.client.listen.prerecorded.v("1").transcribe_file(
                 payload,
                 options,
                 timeout=self.timeout
             )
+            stt_latency_ms = (time.time() - start_time) * 1000
 
             # Extract transcript
             transcript = self._extract_transcript(response)
 
             if transcript:
-                logger.info(f"Transcription from {filename}: '{transcript}'")
+                logger.info(f"✓ STT latency: {stt_latency_ms:.0f}ms | Transcription from {filename}: '{transcript}'")
             else:
-                logger.warning(f"No transcription from {filename}")
+                logger.warning(f"✗ STT latency: {stt_latency_ms:.0f}ms | No transcription from {filename}")
 
             return transcript
 

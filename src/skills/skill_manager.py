@@ -14,6 +14,7 @@ import pkgutil
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Any
 import logging
+import time
 
 from src.skills.base_skill import (
     BaseSkill,
@@ -330,6 +331,7 @@ class SkillManager:
             SkillResponse
         """
         logger.info(f"Executing skill: {skill.name} for intent: {intent}")
+        start_time = time.time()
 
         try:
             # Validate entities
@@ -354,7 +356,8 @@ class SkillManager:
                     data={'error': 'invalid_response_type'},
                 )
 
-            logger.debug(f"Skill '{skill.name}' execution complete: {response.success}")
+            execution_time = (time.time() - start_time) * 1000
+            logger.info(f"✓ Skill execution latency: {execution_time:.0f}ms | Skill: {skill.name} | Success: {response.success}")
             return response
 
         except SkillValidationError as e:

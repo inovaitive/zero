@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ class EntityExtractor:
         Returns:
             EntityExtractionResult with extracted entities
         """
+        start_time = time.time()
         entities = []
 
         # Extract using different methods
@@ -138,13 +140,17 @@ class EntityExtractor:
         entities.extend(self._extract_app_names(text))
         entities.extend(self._extract_numbers(text))
         entities.extend(self._extract_weather_specific(text))
-        
+
         # Extract search queries if intent is search
         if intent_type == "search.web":
             entities.extend(self._extract_search_query(text))
 
         # Remove duplicates (keep highest confidence)
         entities = self._deduplicate_entities(entities)
+
+        extraction_time = (time.time() - start_time) * 1000
+        entity_types = [e.entity_type for e in entities]
+        logger.info(f"✓ Entity extraction latency: {extraction_time:.0f}ms | Found {len(entities)} entities: {entity_types}")
 
         return EntityExtractionResult(
             entities=entities,

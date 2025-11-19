@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Any, List
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +271,7 @@ class IntentClassifier:
         Returns:
             IntentResult with classified intent and confidence
         """
+        overall_start = time.time()
         text = text.strip().lower()
 
         if not text:
@@ -281,30 +283,41 @@ class IntentClassifier:
             )
 
         # Try local pattern matching first
+        pattern_start = time.time()
         result = self._classify_with_patterns(text)
+        pattern_time = (time.time() - pattern_start) * 1000
 
         # If confidence is high enough, return it
         if result.confidence >= self.confidence_threshold:
-            logger.debug(f"Intent classified with patterns: {result.intent.value} ({result.confidence:.2f})")
+            total_time = (time.time() - overall_start) * 1000
+            logger.info(f"✓ Intent latency: {total_time:.0f}ms (pattern: {pattern_time:.0f}ms) | {result.intent.value} ({result.confidence:.2f})")
             return result
 
         # Try spaCy if available
+        spacy_time = 0
         if self.nlp and self.matcher:
+            spacy_start = time.time()
             spacy_result = self._classify_with_spacy(text)
+            spacy_time = (time.time() - spacy_start) * 1000
             if spacy_result.confidence > result.confidence:
                 result = spacy_result
 
         # If still low confidence and cloud fallback enabled, use cloud
+        cloud_time = 0
         if result.confidence < self.confidence_threshold and self.use_cloud_fallback:
             logger.debug(f"Low confidence ({result.confidence:.2f}), using cloud fallback")
+            cloud_start = time.time()
             cloud_result = self._classify_with_cloud(text)
+            cloud_time = (time.time() - cloud_start) * 1000
             if cloud_result and cloud_result.confidence > result.confidence:
-                logger.info(f"Cloud classification improved confidence: {result.confidence:.2f} -> {cloud_result.confidence:.2f}")
+                total_time = (time.time() - overall_start) * 1000
+                logger.info(f"✓ Intent latency: {total_time:.0f}ms (pattern: {pattern_time:.0f}ms, spacy: {spacy_time:.0f}ms, cloud: {cloud_time:.0f}ms) | Cloud improved: {result.confidence:.2f} -> {cloud_result.confidence:.2f}")
                 return cloud_result
             elif cloud_result:
                 logger.debug(f"Cloud classification confidence ({cloud_result.confidence:.2f}) not better than local, using local result")
 
-        logger.debug(f"Final intent: {result.intent.value} ({result.confidence:.2f})")
+        total_time = (time.time() - overall_start) * 1000
+        logger.info(f"✓ Intent latency: {total_time:.0f}ms (pattern: {pattern_time:.0f}ms, spacy: {spacy_time:.0f}ms, cloud: {cloud_time:.0f}ms) | {result.intent.value} ({result.confidence:.2f})")
         return result
 
     def _classify_with_patterns(self, text: str) -> IntentResult:
