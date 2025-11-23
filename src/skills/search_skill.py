@@ -183,8 +183,11 @@ class SearchSkill(BaseSkill):
         for pattern in patterns_to_remove:
             query = re.sub(pattern, "", query, flags=re.IGNORECASE)
 
-        # Clean up and return
+        # Clean up: strip whitespace and trailing punctuation
         query = query.strip()
+        # Remove trailing punctuation (periods, commas, question marks, etc.)
+        query = re.sub(r'[.,!?;:]+$', '', query).strip()
+
         return query if query else user_input
 
     def _build_search_url(self, query: str, engine: str) -> str:
