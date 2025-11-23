@@ -187,12 +187,12 @@ class IntentClassifier:
                 r'\bgo\s+to\s+\w+',
             ],
 
-            # Search patterns
+            # Search patterns - use .+ to match multi-word queries
             IntentType.SEARCH_WEB: [
-                r'\bsearch\s+(for\s+)?\w+',
-                r'\bgoogle\s+\w+',
-                r'\blook\s+up\s+\w+',
-                r'\bfind\s+(me\s+)?(information\s+)?(about\s+)?\w+',
+                r'\bsearch\s+(for\s+)?.+',
+                r'\bgoogle\s+.+',
+                r'\blook\s+up\s+.+',
+                r'\bfind\s+(me\s+)?(information\s+)?(about\s+)?.+',
             ],
 
             # Small talk patterns
@@ -312,14 +312,36 @@ class IntentClassifier:
         best_match = None
         best_confidence = 0.0
 
+        # High-confidence skill intents - these should bypass LLM when matched
+        high_confidence_intents = {
+            IntentType.SEARCH_WEB,
+            IntentType.WEATHER_QUERY,
+            IntentType.TIMER_SET,
+            IntentType.TIMER_CANCEL,
+            IntentType.TIMER_LIST,
+            IntentType.TIMER_STATUS,
+            IntentType.APP_OPEN,
+            IntentType.APP_CLOSE,
+            IntentType.APP_LIST,
+            IntentType.APP_SWITCH,
+        }
+
         for intent_type, patterns in self.patterns.items():
             for pattern in patterns:
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
-                    # Calculate confidence based on match quality
+                    # Calculate base confidence based on match quality
                     match_length = len(match.group(0))
                     text_length = len(text)
-                    confidence = min(0.95, (match_length / text_length) * 1.2)
+                    base_confidence = min(0.95, (match_length / text_length) * 1.2)
+
+                    # Boost confidence for skill-handled intents to ensure they
+                    # are routed to skills instead of LLM fallback
+                    if intent_type in high_confidence_intents:
+                        # Ensure minimum 0.85 confidence for skill intents
+                        confidence = max(0.85, base_confidence)
+                    else:
+                        confidence = base_confidence
 
                     if confidence > best_confidence:
                         best_confidence = confidence

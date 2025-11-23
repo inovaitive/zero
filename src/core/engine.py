@@ -908,6 +908,11 @@ class ZeroEngine:
         # Step 4: Check if a skill can handle this intent
         skill = self.skill_manager._find_skill_for_intent(intent) if self.skill_manager else None
 
+        # Skill-handled intents that should NOT fall back to LLM
+        skill_only_intents = {"search.web", "weather.query", "timer.set", "timer.cancel",
+                             "timer.list", "timer.status", "app.open", "app.close",
+                             "app.list", "app.switch"}
+
         if skill and skill.is_enabled() and confidence > 0.5:
             # Skill can handle this - execute it
             logger.info(f"Executing skill '{skill.name}' for intent '{intent}'")
@@ -932,10 +937,16 @@ class ZeroEngine:
                     return skill_response.message
                 else:
                     logger.warning(f"Skill execution failed: {skill_response.message}")
-                    # Fall through to LLM for error handling
+                    # For skill-only intents, return error message instead of LLM fallback
+                    if intent in skill_only_intents:
+                        return skill_response.message
+                    # Fall through to LLM for other error handling
             except Exception as e:
                 logger.error(f"Error executing skill: {e}", exc_info=True)
-                # Fall through to LLM for error handling
+                # For skill-only intents, return error message instead of LLM fallback
+                if intent in skill_only_intents:
+                    return "I apologize, but I encountered an error processing that request, sir."
+                # Fall through to LLM for other error handling
 
         # Step 5: Use LLM for general conversation or when skills can't handle it
         if not self.llm_client or not self.llm_client.is_available():
@@ -971,15 +982,19 @@ class ZeroEngine:
         logger.info(f"LLM response: '{response_text[:100]}...'")
         return response_text
 
-    def _get_conversation_history_for_llm(self) -> list[dict[str, str]]:
+    def _get_conversation_history_for_llm(self, count: int = 3) -> list[dict[str, str]]:
         """
         Convert conversation history from ContextManager to LLM format.
+
+        Args:
+            count: Number of recent interactions to include (default: 3 for lower latency)
 
         Returns:
             List of messages in format [{"role": "user", "content": "..."}, ...]
         """
         history = []
-        interactions = self.context_manager.get_history(count=10)  # Last 10 interactions
+        # Reduced from 10 to 3 interactions for faster response and less context leakage
+        interactions = self.context_manager.get_history(count=count)
 
         for interaction in interactions:
             # Add user message
