@@ -187,12 +187,13 @@ class IntentClassifier:
                 r'\bgo\s+to\s+\w+',
             ],
 
-            # Search patterns - use [\w\s]+ to match multi-word queries without being too greedy
+            # Search patterns - require explicit search intent phrases at start of input
             IntentType.SEARCH_WEB: [
-                r'\bsearch\s+(for\s+)?[\w\s]+',
-                r'\bgoogle\s+[\w\s]+',
-                r'\blook\s+up\s+[\w\s]+',
-                r'\bfind\s+(me\s+)?(information\s+)?(about\s+)?[\w\s]+',
+                r'^search\s+(for\s+)?[\w\s]+',           # Must start with "search"
+                r'^google\s+[\w\s]+',                    # Must start with "google"
+                r'^look\s+up\s+[\w\s]+',                 # Must start with "look up"
+                r'^find\s+(me\s+)?information\s+(about\s+)?[\w\s]+',  # "find information about"
+                r'^find\s+me\s+[\w\s]+',                 # "find me something" at start
             ],
 
             # Small talk patterns
